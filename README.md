@@ -4,7 +4,7 @@
 
 An interactive, explodable 3D Formula 1 car (Three.js + Vite) explaining both the 2026 FIA Formula 1 Technical Regulations and **32 Real-Time Motorsport IoT Telemetry Sensors**.
 
-👉 **Live Demo on GitHub**: [https://github.com/chandan-bk/formula1-sensors-upgraded](https://github.com/chandan-bk/formula1-sensors-upgraded)
+👉 **Live Demo**: [https://chandan-bk.github.io/formula1-sensors-upgraded/](https://chandan-bk.github.io/formula1-sensors-upgraded/)
 
 ```bash
 npm install
