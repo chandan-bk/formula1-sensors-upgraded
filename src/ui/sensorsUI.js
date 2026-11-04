@@ -1,17 +1,25 @@
 import { SENSOR_CATEGORIES, SENSOR_AUTHORITIES, SENSORS, SENSOR_GROUPS } from '../data/sensors.js';
 import { CHANNELS, LAP_TIME, TRACK_OUTLINE, speedAt } from '../data/telemetry.js';
 
-const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
 /**
- * UI controls for the Motorsport IoT Sensors feature.
+ * UI controls for the Motorsport IoT Sensors Network Explorer.
  *
- *  - Sensors layer chip in the Layers menu
- *  - Floating panel with: live lap HUD + track map, effect toggles, filters,
- *    a searchable list of all sensors (grouped, with live values) and a guided tour.
+ * Provides:
+ *  - Sensors layer toggle chip in the #layers menu
+ *  - Floating HUD & Sensor Network panel with:
+ *    * Real-time 30 Hz lap HUD (Speed, Gear, RPM, Throttle, Brake)
+ *    * Speed-coloured circuit GPS map with car position dot
+ *    * Telemetry Controls: Play/Pause, Reset Lap, Replay Lap, 0.5x / 1x / 2x speed rates
+ *    * Active Faults indicator & one-click Clear All Faults
+ *    * 3D Visual Effect toggles (Live effects, Signal links)
+ *    * Subsystem (Control, Monitoring, Instrumentation) and Authority (FIA, Team) filters
+ *    * Searchable sensor catalogue with live values, units, and fault pills
+ *    * Guided Tour stepping through the car subsystem by subsystem
  */
 export function initSensorsUI({ state, sensorsManager, sim, onLayerToggle, onSelect, onEffects, onNetwork }) {
-  // 1. "Sensors" toggle chip inside the existing #layers menu
+  // 1. "Sensors" toggle chip inside #layers menu
   const layersEl = document.getElementById('layers');
   let sensorChip = null;
 
@@ -19,7 +27,7 @@ export function initSensorsUI({ state, sensorsManager, sim, onLayerToggle, onSel
     sensorChip = document.createElement('button');
     sensorChip.className = 'chip off sensor-layer-chip';
     sensorChip.innerHTML = '<span class="sensor-dot"></span>Sensors';
-    sensorChip.title = 'Show the motorsport sensor network on the car';
+    sensorChip.title = 'Show motorsport IoT sensor network on car';
     sensorChip.addEventListener('click', () => {
       const on = sensorChip.classList.toggle('off') === false;
       state.layers.sensors = on;
@@ -29,7 +37,7 @@ export function initSensorsUI({ state, sensorsManager, sim, onLayerToggle, onSel
     layersEl.append(sensorChip);
   }
 
-  // 2. The floating panel (only visible while the Sensors layer is on)
+  // 2. Floating sensor network control panel
   const panel = document.createElement('div');
   panel.id = 'sensors-legend-panel';
   panel.className = 'sensors-panel';
@@ -40,7 +48,12 @@ export function initSensorsUI({ state, sensorsManager, sim, onLayerToggle, onSel
       .map((s) => {
         const c = SENSOR_CATEGORIES[s.category].color;
         return `<li><button class="sx-row" data-id="${s.id}" title="${esc(s.plain)}">
-            <i style="background:${c}"></i><span class="sx-name">${esc(shortName(s.name))}</span><span class="sx-val" data-v="${s.id}"></span>
+            <i style="background:${c}"></i>
+            <span class="sx-name">${esc(shortName(s.name))}</span>
+            <span class="sx-val-wrap">
+              <span class="sx-val" data-v="${s.id}"></span>
+              <span class="sx-status-badge" data-sb="${s.id}" hidden></span>
+            </span>
           </button></li>`;
       })
       .join('');
@@ -53,13 +66,13 @@ export function initSensorsUI({ state, sensorsManager, sim, onLayerToggle, onSel
   panel.innerHTML = `
     <div class="sensors-panel-inner">
       <div class="sensors-panel-header">
-        <span class="sensors-title">Sensor network</span>
+        <span class="sensors-title">Motorsport IoT Sensors</span>
         <span id="sensors-count" class="sensors-badge">${SENSORS.length} sensors</span>
         <button class="sx-collapse" aria-label="Collapse panel" title="Collapse"></button>
       </div>
 
       <div class="sx-scroll">
-        <p class="sx-intro">Every channel below is measured on the car and sent to one FIA computer. Pin any sensor on the car, or pick one from the list, to see how it works.</p>
+        <p class="sx-intro">32 real-time motorsport IoT sensors and telemetry channels connected to the FIA Standard ECU. Select any sensor to inspect physics and live traces.</p>
 
         <section class="sx-lap" aria-label="Simulated lap">
           <canvas class="sx-map" width="248" height="150"></canvas>
@@ -73,19 +86,30 @@ export function initSensorsUI({ state, sensorsManager, sim, onLayerToggle, onSel
             </div>
           </div>
           <div class="sx-lapctl">
-            <button data-play aria-label="Pause simulation" title="Pause or resume the simulated lap">Pause</button>
-            <div class="sx-rates" role="group" aria-label="Simulation speed">
-              <button data-rate="0.5">0.5×</button><button data-rate="1" class="on">1×</button><button data-rate="2">2×</button>
+            <div class="sx-ctl-row">
+              <button data-play aria-label="Pause simulation" title="Pause or resume the simulated lap">Pause</button>
+              <button data-reset aria-label="Reset simulation" title="Reset lap to start line">Reset</button>
+              <button data-replay aria-label="Replay simulation" title="Replay lap from start">Replay</button>
+              <div class="sx-rates" role="group" aria-label="Simulation speed">
+                <button data-rate="0.5">0.5×</button><button data-rate="1" class="on">1×</button><button data-rate="2">2×</button>
+              </div>
             </div>
-            <span class="sx-lapnote">Simulated lap · ${LAP_TIME} s</span>
+            <div class="sx-lap-info-row">
+              <span class="sx-lap-timer" data-lap-timer>Lap 0:00.00</span>
+              <span class="sx-lapnote">${LAP_TIME} s Lap · 5,120 m</span>
+            </div>
+            <div class="sx-faults-bar" data-faults-bar hidden>
+              <span class="sx-faults-label" data-faults-text>0 Faults Active</span>
+              <button class="sx-clear-faults-btn" data-clear-all-faults title="Restore all sensors to nominal calibration">Clear All Faults</button>
+            </div>
           </div>
         </section>
 
         <div class="sx-toggles">
           <label class="sx-switch" title="Pulsing rings, live glow and sensing-field animations on the car">
-            <input type="checkbox" data-fx checked /><i></i><span>Live effects</span>
+            <input type="checkbox" data-fx checked /><i></i><span>Live 3D effects</span>
           </label>
-          <label class="sx-switch" title="Draw every sensor's route to the ECU">
+          <label class="sx-switch" title="Draw every sensor's signal path to the ECU">
             <input type="checkbox" data-net /><i></i><span>Show all signal links</span>
           </label>
         </div>
@@ -104,19 +128,19 @@ export function initSensorsUI({ state, sensorsManager, sim, onLayerToggle, onSel
           <span class="filter-label">Authority</span>
           <div class="filter-chips" id="auth-filters">
             <button class="sensor-filter-btn active" data-auth="all">All</button>
-            <button class="sensor-filter-btn" data-auth="FIA" title="${esc(SENSOR_AUTHORITIES.FIA.description)}"><i style="background:${SENSOR_AUTHORITIES.FIA.badgeColor}"></i>FIA mandatory</button>
-            <button class="sensor-filter-btn" data-auth="Team" title="${esc(SENSOR_AUTHORITIES.Team.description)}"><i style="background:${SENSOR_AUTHORITIES.Team.badgeColor}"></i>Team engineering</button>
+            <button class="sensor-filter-btn" data-auth="FIA" title="${esc(SENSOR_AUTHORITIES.FIA.description)}"><i style="background:${SENSOR_AUTHORITIES.FIA.badgeColor}"></i>FIA Mandatory</button>
+            <button class="sensor-filter-btn" data-auth="Team" title="${esc(SENSOR_AUTHORITIES.Team.description)}"><i style="background:${SENSOR_AUTHORITIES.Team.badgeColor}"></i>Team Engineering</button>
           </div>
         </div>
 
         <div class="sx-list-head">
-          <input type="search" class="sx-search" placeholder="Search sensors…" autocomplete="off" aria-label="Search sensors" />
+          <input type="search" class="sx-search" placeholder="Search 32 sensors by name, location, or parameter…" autocomplete="off" aria-label="Search sensors" />
           <button class="sx-tour" title="Step through every sensor, subsystem by subsystem">Start tour</button>
         </div>
         <div class="sx-list">${groupsHtml}<p class="sx-empty" hidden>No sensors match these filters.</p></div>
 
         <div class="sensors-confidential-note">
-          Positions, ranges and traces are representative. Real layouts and figures are team-confidential.
+          Simulated telemetry model aligned with 2026 FIA Technical Regulations. Team proprietary configurations are confidential.
         </div>
       </div>
     </div>
@@ -136,6 +160,7 @@ export function initSensorsUI({ state, sensorsManager, sim, onLayerToggle, onSel
       updateCount();
     }),
   );
+
   const authButtons = $$('[data-auth]');
   authButtons.forEach((btn) =>
     btn.addEventListener('click', () => {
@@ -156,7 +181,7 @@ export function initSensorsUI({ state, sensorsManager, sim, onLayerToggle, onSel
     let shown = 0;
     for (const [id, btn] of rows) {
       const s = sensorById.get(id);
-      const hay = `${s.name} ${s.measures} ${s.group}`.toLowerCase();
+      const hay = `${s.name} ${s.measures} ${s.group} ${s.locationDesc || ''} ${s.id}`.toLowerCase();
       const ok = sensorsManager.matchesFilter(s) && (!q || hay.includes(q));
       btn.parentElement.hidden = !ok;
       if (ok) shown++;
@@ -172,8 +197,8 @@ export function initSensorsUI({ state, sensorsManager, sim, onLayerToggle, onSel
   search.addEventListener('input', refreshList);
 
   for (const [id, btn] of rows) btn.addEventListener('click', () => onSelect?.(sensorById.get(id)));
+
   $('.sx-tour').addEventListener('click', () => {
-    // restore the full catalogue so the tour covers everything
     catButtons[0].click();
     authButtons[0].click();
     search.value = '';
@@ -185,7 +210,7 @@ export function initSensorsUI({ state, sensorsManager, sim, onLayerToggle, onSel
   $('[data-fx]').addEventListener('change', (e) => onEffects?.(e.target.checked));
   $('[data-net]').addEventListener('change', (e) => onNetwork?.(e.target.checked));
 
-  /* ---------------- collapse (starts collapsed on phones) ---------------- */
+  /* ---------------- collapse (starts collapsed on small screens) ---------------- */
   const collapseBtn = $('.sx-collapse');
   const setCollapsed = (c) => {
     panel.classList.toggle('collapsed', c);
@@ -200,6 +225,25 @@ export function initSensorsUI({ state, sensorsManager, sim, onLayerToggle, onSel
     sim.running = !sim.running;
     playBtn.textContent = sim.running ? 'Pause' : 'Play';
   });
+
+  const resetBtn = $('[data-reset]');
+  resetBtn.addEventListener('click', () => {
+    sim.reset();
+    playBtn.textContent = sim.running ? 'Pause' : 'Play';
+  });
+
+  const replayBtn = $('[data-replay]');
+  replayBtn.addEventListener('click', () => {
+    sim.replay();
+    playBtn.textContent = 'Pause';
+  });
+
+  const clearAllFaultsBtn = $('[data-clear-all-faults]');
+  clearAllFaultsBtn?.addEventListener('click', () => {
+    sim.clearAllFaults();
+    updateFaultsBar();
+  });
+
   const rateBtns = $$('[data-rate]');
   rateBtns.forEach((b) =>
     b.addEventListener('click', () => {
@@ -207,6 +251,15 @@ export function initSensorsUI({ state, sensorsManager, sim, onLayerToggle, onSel
       rateBtns.forEach((x) => x.classList.toggle('on', x === b));
     }),
   );
+
+  /* Keyboard shortcut: Space pauses/plays simulation */
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' && !/INPUT|TEXTAREA|BUTTON/.test(document.activeElement?.tagName)) {
+      e.preventDefault();
+      sim.running = !sim.running;
+      playBtn.textContent = sim.running ? 'Pause' : 'Play';
+    }
+  });
 
   /* ---------------- mini track map ---------------- */
   const map = $('.sx-map');
@@ -218,13 +271,16 @@ export function initSensorsUI({ state, sensorsManager, sim, onLayerToggle, onSel
     rpm: $('[data-b="rpm"]'),
     thr: $('[data-b="thr"]'),
     brk: $('[data-b="brk"]'),
+    timer: $('[data-lap-timer]'),
+    faultsBar: $('[data-faults-bar]'),
+    faultsText: $('[data-faults-text]'),
   };
 
   function drawMap() {
     mctx.clearRect(0, 0, map.width, map.height);
     mctx.drawImage(track.layer, 0, 0);
     const p = track.at(sim.state.phase);
-    // trailing glow behind the car
+    // trailing glow behind car
     for (let i = 1; i <= 10; i++) {
       const q = track.at((sim.state.phase - i * 0.004 + 1) % 1);
       mctx.fillStyle = `rgba(255,255,255,${0.35 * (1 - i / 11)})`;
@@ -241,24 +297,57 @@ export function initSensorsUI({ state, sensorsManager, sim, onLayerToggle, onSel
     mctx.shadowBlur = 0;
   }
 
-  /* ---------------- per-frame update (called from the main loop) ---------------- */
+  function updateFaultsBar() {
+    const faultCount = sim.faults?.size || 0;
+    if (hudEls.faultsBar) {
+      hudEls.faultsBar.hidden = faultCount === 0;
+      if (hudEls.faultsText) {
+        hudEls.faultsText.textContent = `${faultCount} Active Sensor Fault${faultCount > 1 ? 's' : ''}`;
+      }
+    }
+  }
+
+  /* ---------------- per-frame update ---------------- */
   let lastHud = 0;
   function update(now) {
     if (panel.hidden || panel.classList.contains('collapsed')) return;
     drawMap();
-    if (now - lastHud < 90) return;
+    if (now - lastHud < 80) return;
     lastHud = now;
+
     const s = sim.state;
     hudEls.speed.textContent = Math.round(s.speed);
     hudEls.gear.textContent = s.gear;
     hudEls.rpm.style.width = `${((s.rpm - 4000) / 11000) * 100}%`;
     hudEls.thr.style.width = `${s.throttle}%`;
     hudEls.brk.style.width = `${s.brake}%`;
+
+    const ts = sim.getTimestamp ? sim.getTimestamp() : { formattedTime: '0:00' };
+    if (hudEls.timer) hudEls.timer.textContent = `Lap ${ts.formattedTime}`;
+
+    updateFaultsBar();
+
+    // Update list rows
     for (const g of $$('.sx-group[open]')) {
       for (const el of g.querySelectorAll('li:not([hidden]) [data-v]')) {
-        const key = sensorById.get(el.dataset.v).live;
+        const sensor = sensorById.get(el.dataset.v);
+        if (!sensor) continue;
+        const key = sensor.live;
         const c = CHANNELS[key];
         el.textContent = `${sim.format(key)}${c.unit && !c.text ? ` ${c.unit}` : ''}`;
+
+        // Status badge
+        const badgeEl = g.querySelector(`[data-sb="${sensor.id}"]`);
+        if (badgeEl) {
+          const status = sim.getStatus(key);
+          if (status.severity !== 'nominal') {
+            badgeEl.hidden = false;
+            badgeEl.textContent = status.code || 'ALERT';
+            badgeEl.className = `sx-status-badge ${status.severity}`;
+          } else {
+            badgeEl.hidden = true;
+          }
+        }
       }
     }
   }
@@ -298,19 +387,18 @@ export function initSensorsUI({ state, sensorsManager, sim, onLayerToggle, onSel
   };
 }
 
-/** Trim the long catalogue names for list rows. */
+/** Trim catalogue names for clean list row appearance */
 function shortName(name) {
   return name
     .replace(/^FIA /, '')
     .replace(/ \(.*\)$/, '')
-    .replace(/Dynamic |High-Bandwidth |Linear |Optical |Telemetry /g, '')
+    .replace(/Dynamic |High-Bandwidth |Linear |Optical |Telemetry |Chassis /g, '')
     .replace(/ Sensors?$/, '');
 }
 
-/** Pre-render the circuit coloured by speed, and return a phase -> point lookup. */
+/** Pre-render circuit coloured by speed */
 function buildTrack(W, H) {
   const pts = TRACK_OUTLINE.map(([x, y]) => [x * W, y * H * 0.98 + 2]);
-  // closed Catmull-Rom spline, sampled densely
   const samples = [];
   const n = pts.length;
   for (let i = 0; i < n; i++) {
@@ -342,13 +430,13 @@ function buildTrack(W, H) {
   const g = layer.getContext('2d');
   g.lineCap = 'round';
   g.lineJoin = 'round';
-  // dark casing, then speed-coloured centre line (slow = red, fast = cyan)
   g.strokeStyle = 'rgba(0,0,0,0.55)';
   g.lineWidth = 9;
   g.beginPath();
   samples.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
   g.closePath();
   g.stroke();
+
   for (let i = 0; i < samples.length; i++) {
     const a = samples[i];
     const b = samples[(i + 1) % samples.length];
@@ -361,6 +449,7 @@ function buildTrack(W, H) {
     g.lineTo(b[0], b[1]);
     g.stroke();
   }
+
   // start / finish tick
   g.strokeStyle = '#fff';
   g.lineWidth = 2;

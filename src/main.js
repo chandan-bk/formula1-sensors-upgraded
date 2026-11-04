@@ -26,6 +26,30 @@ import { SENSORS } from './data/sensors.js';
 /* Renderer, scene, camera                                            */
 /* ------------------------------------------------------------------ */
 
+function checkWebGL() {
+  try {
+    const c = document.createElement('canvas');
+    return !!(window.WebGLRenderingContext && (c.getContext('webgl') || c.getContext('experimental-webgl')));
+  } catch (e) {
+    return false;
+  }
+}
+
+if (!checkWebGL()) {
+  const loading = document.getElementById('loading');
+  if (loading) loading.style.display = 'none';
+  const errDiv = document.createElement('div');
+  errDiv.className = 'webgl-fallback';
+  errDiv.innerHTML = `
+    <div style="position:fixed;inset:0;background:#0d0e12;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;z-index:999999;font-family:system-ui,sans-serif;">
+      <h2 style="color:#ff1744;margin-bottom:12px;">⚠️ WebGL Hardware Acceleration Required</h2>
+      <p style="max-width:540px;line-height:1.6;color:#c4c9ce;margin-bottom:16px;">The Formula 1 3D Sensor Explorer utilizes Three.js shaders and procedural geometry requiring WebGL support.</p>
+      <p style="font-size:13px;color:#8e9297;">Please enable hardware acceleration in your browser settings or try an updated modern browser.</p>
+    </div>
+  `;
+  document.body.appendChild(errDiv);
+}
+
 const stage = document.getElementById('stage');
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));

@@ -97,7 +97,9 @@ export class SensorsManager {
     this._v = new THREE.Vector3();
     this._w = new THREE.Vector3();
     this._c = new THREE.Color();
-    this._red = new THREE.Color(0xff2d2d);
+    this._red = new THREE.Color(0xff1744);
+    this._amber = new THREE.Color(0xff9100);
+    this._gray = new THREE.Color(0x3a3d45);
     this.fxRoot = new THREE.Group();
     this.fxRoot.name = 'sensor_fx';
     scene.add(this.fxRoot);
@@ -617,27 +619,46 @@ export class SensorsManager {
       const value = sim.state[live];
       const norm = sim.norm(live);
       m.norm += (norm - m.norm) * (1 - Math.exp(-dt * 10));
-      m.warn = !!ch && ((ch.warnHi !== undefined && value > ch.warnHi) || (ch.warnLo !== undefined && value < ch.warnLo));
 
-      // live glow: accent bands brighten with the reading and flash red on an alarm
-      const glow = this.effects ? 0.25 + 1.5 * m.norm : 0.45;
-      const boost = m.hot || isActive ? 1.55 : 1;
-      this._c.copy(m.color);
-      if (this.effects && m.warn) this._c.lerp(this._red, 0.5 + 0.5 * Math.sin(t * 14));
+      const status = sim.getStatus ? sim.getStatus(live) : { severity: 'nominal', text: 'Nominal' };
+      const isFault = !!status.fault;
+      const isCrit = status.severity === 'critical';
+      const isWarn = status.severity === 'warning';
+      const isDisconnected = status.fault && status.fault.type === 'disconnected';
+      m.warn = isWarn || isCrit || isFault;
+
+      // Visual state mapping: Normal, Selected, Warning, Critical, Disconnected, Faulty
+      let glow = 0.45;
+      const boost = m.hot || isActive ? 1.6 : 1.0;
+
+      if (isDisconnected) {
+        this._c.copy(this._gray);
+        glow = 0.12;
+      } else if (isCrit) {
+        this._c.copy(this._red);
+        glow = 0.6 + 1.2 * (0.5 + 0.5 * Math.sin(t * 16)); // Rapid alarm flash
+      } else if (isWarn) {
+        this._c.copy(this._amber);
+        glow = 0.5 + 0.8 * (0.5 + 0.5 * Math.sin(t * 8)); // Warning pulse
+      } else {
+        this._c.copy(m.color);
+        glow = this.effects ? 0.25 + 1.5 * m.norm : 0.45;
+      }
+
       for (const a of m.accents) {
         a.emissiveIntensity = glow * boost;
         a.emissive.copy(this._c);
         a.color.copy(this._c);
       }
 
-      // halos
+      // Halos
       if (this.effects) {
         const hz = m.sensor.hz || 100;
-        const freq = 0.35 + 0.18 * Math.log10(hz);
+        const freq = isCrit ? 1.8 : isWarn ? 1.1 : 0.35 + 0.18 * Math.log10(hz);
         const big = isActive && activeType === 'rf';
         const base = isActive ? (big ? 0.7 : 0.3) : 0.17;
         const span = isActive ? (big ? 2.6 : 1.9) : 1.5;
-        const count = isActive ? 3 : 1;
+        const count = isDisconnected ? 0 : isActive ? 3 : 1;
         for (let i = 0; i < 3; i++) {
           const r = rings[i];
           if (i >= count) {
@@ -647,14 +668,15 @@ export class SensorsManager {
           const ph = (t * (big ? freq * 0.7 : freq) + m.seed + i / count) % 1;
           r.visible = true;
           r.scale.setScalar(base * (0.55 + ph * span));
-          r.material.opacity = Math.pow(1 - ph, 1.6) * (isActive ? 0.8 : 0.22 + 0.4 * m.norm);
-          r.material.color.copy(m.warn ? this._red : m.color);
+          r.material.opacity = Math.pow(1 - ph, 1.6) * (isActive ? 0.85 : 0.25 + 0.45 * m.norm);
+          r.material.color.copy(isCrit ? this._red : isWarn ? this._amber : m.color);
         }
         if (isActive) {
           reticle.visible = true;
           reticle.material.rotation = t * 0.7;
           const pulse = 1 + 0.06 * Math.sin(t * 5);
           reticle.scale.setScalar(0.3 * pulse);
+          reticle.material.color.copy(isCrit ? this._red : isWarn ? this._amber : m.color);
         }
         animating = true;
       } else {

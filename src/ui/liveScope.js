@@ -1,16 +1,20 @@
 import { CHANNELS } from '../data/telemetry.js';
 
 /**
- * A small oscilloscope that draws the last ~12 s of one simulated telemetry channel.
- * Reference lines are drawn for the channel's limits so a reading can be judged at a glance:
- *   amber dashed = warning limit, green band = ideal operating window, white dotted = legal limit.
+ * A real-time oscilloscope rendering a 12-second rolling buffer of one telemetry channel.
+ * Dynamically draws:
+ *   - Warning & Critical limit lines
+ *   - Calibrated ideal operating window
+ *   - Real-time trace with soft gradient area fill
+ *   - Dynamic trace color shift to warning amber or fault/critical crimson
+ *   - Live cursor tracking latest value
  */
 export class LiveScope {
   /**
    * @param {HTMLCanvasElement} canvas
    * @param {ReturnType<import('../data/telemetry.js').createTelemetry>} sim
    * @param {string} channel key in CHANNELS
-   * @param {string} color trace colour (CSS)
+   * @param {string} color default trace colour (CSS)
    * @param {{compact?: boolean}} [opts]
    */
   constructor(canvas, sim, channel, color, { compact = false } = {}) {
@@ -51,7 +55,7 @@ export class LiveScope {
     const span = def.max - def.min;
     const yOf = (v) => padT + H - ((v - def.min) / span) * H;
 
-    // grid
+    // Grid lines
     if (!this.compact) {
       ctx.strokeStyle = 'rgba(255,250,245,0.06)';
       ctx.lineWidth = 1;
@@ -69,12 +73,13 @@ export class LiveScope {
       ctx.stroke();
     }
 
-    // ideal window
+    // Ideal operating window (green band)
     if (def.bandLo !== undefined && def.bandHi !== undefined) {
       ctx.fillStyle = 'rgba(0,230,118,0.08)';
       ctx.fillRect(0, yOf(def.bandHi), W, yOf(def.bandLo) - yOf(def.bandHi));
     }
-    // limit lines
+
+    // Threshold reference limit lines
     const line = (v, col, dash) => {
       if (v === undefined) return;
       const y = Math.round(yOf(v)) + 0.5;
@@ -87,14 +92,25 @@ export class LiveScope {
       ctx.stroke();
       ctx.setLineDash([]);
     };
-    line(def.warnHi, 'rgba(255,171,64,0.55)', [4, 3]);
-    line(def.warnLo, 'rgba(255,171,64,0.55)', [4, 3]);
+
+    line(def.warnHi, 'rgba(255,171,64,0.6)', [4, 3]);
+    line(def.warnLo, 'rgba(255,171,64,0.6)', [4, 3]);
+    line(def.critHi, 'rgba(255,23,68,0.7)', [2, 2]);
+    line(def.critLo, 'rgba(255,23,68,0.7)', [2, 2]);
     line(def.limit, 'rgba(255,255,255,0.45)', [1, 3]);
     if (def.min < 0 && def.max > 0) line(0, 'rgba(255,250,245,0.14)', []);
 
-    // trace
+    // Check status to dynamically color trace
+    const status = this.sim.getStatus ? this.sim.getStatus(this.ch) : null;
+    const isCrit = status && (status.severity === 'critical' || status.fault);
+    const isWarn = status && status.severity === 'warning';
+    const traceColor = isCrit ? '#ff1744' : isWarn ? '#ff9100' : this.color;
+
+    // Retrieve series
     this.buf = this.sim.series(this.ch, this.buf);
     const n = this.buf.length;
+
+    // Gradient fill under trace
     ctx.beginPath();
     for (let i = 0; i < n; i++) {
       const x = (i / (n - 1)) * W;
@@ -103,12 +119,13 @@ export class LiveScope {
       else if (def.text) {
         ctx.lineTo(x, yOf(Math.min(def.max, Math.max(def.min, this.buf[i - 1]))));
         ctx.lineTo(x, y);
-      } else ctx.lineTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
     }
-    // soft fill under the trace
     const grad = ctx.createLinearGradient(0, padT, 0, padT + H);
-    grad.addColorStop(0, hexA(this.color, 0.28));
-    grad.addColorStop(1, hexA(this.color, 0));
+    grad.addColorStop(0, hexA(traceColor, 0.28));
+    grad.addColorStop(1, hexA(traceColor, 0));
     ctx.save();
     ctx.lineTo(W, padT + H);
     ctx.lineTo(0, padT + H);
@@ -117,6 +134,7 @@ export class LiveScope {
     ctx.fill();
     ctx.restore();
 
+    // Trace stroke
     ctx.beginPath();
     for (let i = 0; i < n; i++) {
       const x = (i / (n - 1)) * W;
@@ -125,24 +143,26 @@ export class LiveScope {
       else if (def.text) {
         ctx.lineTo(x, yOf(Math.min(def.max, Math.max(def.min, this.buf[i - 1]))));
         ctx.lineTo(x, y);
-      } else ctx.lineTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
     }
-    ctx.strokeStyle = this.color;
+    ctx.strokeStyle = traceColor;
     ctx.lineWidth = this.compact ? 1.4 : 1.7;
     ctx.lineJoin = 'round';
-    ctx.shadowColor = this.color;
-    ctx.shadowBlur = this.compact ? 0 : 6;
+    ctx.shadowColor = traceColor;
+    ctx.shadowBlur = this.compact ? 0 : (isCrit ? 8 : 5);
     ctx.stroke();
     ctx.shadowBlur = 0;
 
-    // live cursor
+    // Live cursor at right edge
     const last = this.buf[n - 1];
     const cy = yOf(Math.min(def.max, Math.max(def.min, last)));
-    ctx.fillStyle = this.color;
+    ctx.fillStyle = traceColor;
     ctx.beginPath();
     ctx.arc(W, cy, this.compact ? 2.5 : 3.4, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = hexA(this.color, 0.35);
+    ctx.strokeStyle = hexA(traceColor, 0.4);
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.arc(W, cy, this.compact ? 5 : 7.5, 0, Math.PI * 2);

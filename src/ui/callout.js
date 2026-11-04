@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { CATEGORIES } from '../data/parts.js';
 import { mountSensorPreview, unmountSensorPreview } from './sensorPreview.js';
-import { SENSORS, SENSOR_GROUPS, SENSOR_CATEGORIES, SENSOR_AUTHORITIES } from '../data/sensors.js';
-import { explainStage } from '../data/sensorDetails.js';
-import { CHANNELS, LAP_TIME } from '../data/telemetry.js';
+import { SENSORS, SENSOR_GROUPS, SENSOR_CATEGORIES, SENSOR_AUTHORITIES, SENSOR_TYPES } from '../data/sensors.js';
+import { explainStage, ARCHITECTURE_STAGES } from '../data/sensorDetails.js';
+import { CHANNELS, LAP_TIME, FAULT_MODES } from '../data/telemetry.js';
 import { LiveScope } from './liveScope.js';
 
 const FREEDOM = ['None', 'Minimal', 'Limited', 'Substantial', 'High'];
@@ -16,12 +16,15 @@ function freeBounds(h) {
   return { T: top + 12, B: bottom - 12 };
 }
 
-const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
 /**
- * Floating info card connected to a point on a part by a leader line.
- * The anchor is stored in the part's local space so the line tracks the part
- * as it explodes, hides or as the camera orbits.
+ * Floating info card connected to a 3D component by an SVG leader line.
+ * Fully supports:
+ *   - FIA Regulations Part Explanations
+ *   - 32 Motorsport IoT Sensors with Live Telemetry, Scope Traces, and Interactive Fault Simulation
+ *   - 360-degree Turntable 3D Inspector
+ *   - End-to-End 6-Stage Telemetry Architecture Visualizer
  */
 export class Callout {
   constructor({ card, svg, camera, renderer, onClose, onFocusSensor, onNavigate, sim }) {
@@ -131,14 +134,16 @@ export class Callout {
     this.live = null;
   }
 
-  /** Sensor card: a compact live preview on hover, the full explainer once pinned. */
+  /** Render Sensor detail card: hover shows compact preview, click pins full technical suite */
   renderSensor(sensor, pinned) {
     const cat = SENSOR_CATEGORIES[sensor.category];
     const auth = SENSOR_AUTHORITIES[sensor.authority];
+    const typeDef = SENSOR_TYPES[sensor.sensorType] || SENSOR_TYPES.physical;
     const catColor = cat.color;
     const authColor = auth.badgeColor;
     const group = SENSOR_GROUPS.find((g) => g.id === sensor.group);
     const ch = CHANNELS[sensor.live];
+
     this.path.style.stroke = catColor;
     this.dot.style.fill = '#131212';
     this.dot.style.stroke = catColor;
@@ -151,25 +156,35 @@ export class Callout {
       <div class="cat-row">
         <span class="cat"><i style="background:${catColor}"></i>${esc(cat.short)}<span class="cat-sep">in</span>${esc(group?.label ?? '')}</span>
         <span class="sensor-auth-badge" style="background:${authColor}22; color:${authColor}; border:1px solid ${authColor}55;" title="${esc(auth.description)}">
-          ${esc(sensor.authority === 'FIA' ? 'FIA mandatory' : 'Team')}
+          ${esc(sensor.authority === 'FIA' ? 'FIA Mandatory' : 'Team Engineering')}
+        </span>
+        <span class="sensor-type-pill" title="${esc(typeDef.description)}">
+          ${esc(typeDef.label)}
         </span>
         ${pinned ? '<button class="close" aria-label="Close"></button>' : ''}
       </div>
       <h3>${esc(sensor.name)}</h3>
-      <p class="sensor-plain">${esc(sensor.plain)}</p>`;
+      <p class="sensor-plain">${esc(sensor.plain)}</p>
+      <div class="sensor-meta-tags">
+        <span class="sensor-loc-tag" title="Physical Installation Point">📍 ${esc(sensor.locationDesc || 'Chassis')}</span>
+        <span class="sensor-part-tag" title="Connected Subsystem Component">🔗 ${esc(sensor.connectedComponent || 'Vehicle Sub-Loom')}</span>
+      </div>`;
 
     const liveBlock = `
       <div class="sensor-live">
         <div class="live-read">
-          <span class="live-label">${esc(ch.label)}</span>
+          <div class="live-title-col">
+            <span class="live-label">${esc(ch.label)}</span>
+            <span class="live-meta-stream" data-live="stream">30 Hz Ingest · Active Lap</span>
+          </div>
           <span class="live-value"><b data-live="value">–</b><em>${esc(ch.unit)}</em></span>
-          <span class="live-status" data-live="status">Nominal</span>
+          <span class="live-status nominal" data-live="status">Nominal</span>
         </div>
         <canvas class="live-scope" data-live="scope"></canvas>
       </div>`;
 
     if (!pinned) {
-      this.card.innerHTML = `${head}${liveBlock}<p class="pin-hint">Click the sensor to pin the full explanation</p>`;
+      this.card.innerHTML = `${head}${liveBlock}<p class="pin-hint">Click sensor marker on car to pin full telemetry suite</p>`;
       this.attachLive(sensor, catColor, true);
       return;
     }
@@ -180,46 +195,123 @@ export class Callout {
     const readings = Math.round((sensor.hz || 100) * LAP_TIME);
     const fmtHz = sensor.hz >= 1000 ? `${(sensor.hz / 1000).toString().replace(/\.0$/, '')} kHz` : `${sensor.hz} Hz`;
 
-    const tabWhat = `
-      <div class="tab-panel" data-panel="what">
-        <p><b>Measures</b> ${esc(sensor.measures)}</p>
-        <p><b>Why it matters</b> ${esc(sensor.whyItMatters)}</p>
-        <div class="sensor-note read"><span>How engineers read it</span>${esc(sensor.reading)}</div>
-        <div class="sensor-note fail"><span>If it fails</span>${esc(sensor.failure)}</div>
+    // Interactive Fault Suite
+    const faultControls = `
+      <div class="fault-suite-box">
+        <div class="fault-suite-head">
+          <span class="fault-suite-title">⚡ Sensor Fault & Anomaly Injection</span>
+          <span class="fault-suite-hint">Inject real-world motorsport failure modes to verify fail-safe response:</span>
+        </div>
+        <div class="fault-buttons-grid" role="group" aria-label="Sensor fault simulation modes">
+          <button class="fault-btn on" data-fault="none" title="Nominal baseline calibration">Nominal</button>
+          <button class="fault-btn" data-fault="disconnected" title="Wiring disconnection / open circuit">Disconnect</button>
+          <button class="fault-btn" data-fault="stuck" title="Frozen ADC reading / seized linkage">Stuck ADC</button>
+          <button class="fault-btn" data-fault="noisy" title="High-voltage MGU-K inverter EMI noise">EMI Noise</button>
+          <button class="fault-btn" data-fault="out_of_range" title="Positive supply rail electrical saturation">Out-of-Range</button>
+          <button class="fault-btn" data-fault="delayed" title="CAN-FD buffer queue latency">CAN Delay</button>
+          <button class="fault-btn" data-fault="intermittent" title="Vibration induced contact bounce">Intermittent</button>
+        </div>
+        <div class="fault-diagnostic-alert" data-fault-alert hidden>
+          <div class="fault-alert-header">
+            <span class="fault-alert-badge" data-fault-badge>FAULT ACTIVE</span>
+            <span class="fault-alert-code" data-fault-code>ERR</span>
+          </div>
+          <p class="fault-alert-desc" data-fault-desc></p>
+          <div class="fault-alert-investigate">
+            <b>Race Engineer Diagnostic Action:</b>
+            <p data-fault-investigation></p>
+          </div>
+          <button class="fault-restore-btn" data-fault-restore>Restore Channel to Nominal</button>
+        </div>
       </div>`;
 
+    // Tab 1: What it does
+    const tabWhat = `
+      <div class="tab-panel" data-panel="what">
+        <div class="spec-row-item">
+          <b>Primary Measurement:</b> <span>${esc(sensor.measures)}</span>
+        </div>
+        <div class="spec-row-item">
+          <b>Why it matters:</b> <span>${esc(sensor.whyItMatters)}</span>
+        </div>
+        <div class="sensor-note read">
+          <span>How engineers read the trace</span>
+          ${esc(sensor.reading)}
+        </div>
+        <div class="sensor-note fail">
+          <span>System response if sensor fails</span>
+          ${esc(sensor.failure)}
+        </div>
+        <div class="sensor-note checklist">
+          <span>Pit wall diagnostic investigation checklist</span>
+          ${esc(sensor.investigation || 'Inspect wiring loom continuity, check excitation supply voltage, clean sensing element face, and verify CAN-FD bus termination resistance.')}
+        </div>
+      </div>`;
+
+    // Tab 2: How it works
     const tabHow = `
       <div class="tab-panel" data-panel="how" hidden>
-        <p>${esc(sensor.principle)}</p>
+        <p class="principle-text">${esc(sensor.principle)}</p>
         <dl class="spec-grid">
           ${sensor.specs.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}
         </dl>
-        <p class="spec-fine">Sampled around ${esc(fmtHz)}, roughly ${readings.toLocaleString('en-US')} readings in one ${LAP_TIME} s lap.</p>
-        <p class="spec-fine"><b>${esc(cat.short)}:</b> ${esc(cat.description)}<br /><b>${esc(auth.short)}:</b> ${esc(auth.description)}</p>
+
+        <div class="thresholds-summary-table">
+          <h4>Operating Thresholds & Calibrated Window</h4>
+          <div class="threshold-chips">
+            <div class="thresh-chip green">
+              <span class="tc-label">Ideal Window</span>
+              <span class="tc-val">${ch.bandLo !== undefined ? `${ch.bandLo} – ${ch.bandHi} ${ch.unit}` : 'Standard'}</span>
+            </div>
+            <div class="thresh-chip amber">
+              <span class="tc-label">Warning Limit</span>
+              <span class="tc-val">${ch.warnHi !== undefined ? `> ${ch.warnHi} ${ch.unit}` : ch.warnLo !== undefined ? `< ${ch.warnLo} ${ch.unit}` : '±10%'}</span>
+            </div>
+            <div class="thresh-chip red">
+              <span class="tc-label">Critical Alarm</span>
+              <span class="tc-val">${ch.critHi !== undefined ? `> ${ch.critHi} ${ch.unit}` : ch.critLo !== undefined ? `< ${ch.critLo} ${ch.unit}` : 'Hard Limit'}</span>
+            </div>
+          </div>
+        </div>
+
+        <p class="spec-fine">Sampled continuously at ${esc(fmtHz)}, producing ~${readings.toLocaleString('en-US')} discrete readings over each ${LAP_TIME} s lap.</p>
+        <p class="spec-fine academic-note">
+          <b>Engineering Education Note:</b> Values shown are physically coupled via an illustrative lap vehicle dynamics model (src/data/telemetry.js). In actual F1 competition, team proprietary calibrations remain strictly confidential.
+        </p>
       </div>`;
 
+    // Tab 3: Signal path
     const tabPath = `
       <div class="tab-panel" data-panel="path" hidden>
-        <p class="spec-fine path-intro">Follow a reading from the sensor to the pit wall. The glowing line on the car shows this route (drawn schematically).</p>
-        <ol class="stage-list">
-          ${stages
-            .map(
-              (st, i) => `
-            <li style="--i:${i}">
-              <span class="stage-dot"></span>
-              <div><b>${esc(st)}</b><p>${esc(explainStage(st, note[i]))}</p></div>
-            </li>`,
-            )
-            .join('')}
-        </ol>
+        <p class="spec-fine path-intro">Follow this telemetry channel from physical transducer acquisition through vehicle networks to trackside race strategy:</p>
+        <div class="architecture-diagram-container">
+          <ol class="stage-list">
+            ${ARCHITECTURE_STAGES.map((st, i) => `
+              <li class="arch-stage-item" style="--i:${i}">
+                <div class="stage-dot"></div>
+                <div class="stage-content">
+                  <div class="stage-top">
+                    <b>${esc(st.label)}</b>
+                    <span class="stage-type-tag">${esc(st.type)}</span>
+                  </div>
+                  <p>${esc(st.desc)}</p>
+                </div>
+              </li>
+            `).join('')}
+          </ol>
+        </div>
+        <div class="path-simulation-notice">
+          ℹ️ <b>System Architecture Notice:</b> Stages 1–3 represent vehicle electronics hardware. Stage 4 models the McLaren Applied TAG-320 SECU. In this web application, vehicle physics, CAN framing, and radio transmission are running inside the browser simulation engine.
+        </div>
       </div>`;
 
     this.card.innerHTML = `
       ${head}
       <div class="sensor-3d-turntable-container" id="sensor-preview-slot"></div>
       ${liveBlock}
+      ${faultControls}
       <div class="sensor-tabs" role="tablist">
-        <button role="tab" data-tab="what">What it does</button>
+        <button role="tab" data-tab="what" class="on">What it does</button>
         <button role="tab" data-tab="how">How it works</button>
         <button role="tab" data-tab="path">Signal path</button>
       </div>
@@ -230,11 +322,33 @@ export class Callout {
         <button data-nav="1" aria-label="Next sensor">›</button>
       </div>
     `;
+
+    // Wire up events
     this.card.querySelector('.close')?.addEventListener('click', () => this.onClose?.());
     this.card.querySelectorAll('[data-nav]').forEach((b) => b.addEventListener('click', () => this.onNavigate?.(Number(b.dataset.nav))));
     this.card.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => this.setTab(b.dataset.tab)));
+
+    // Wire up fault buttons
+    const faultBtns = this.card.querySelectorAll('[data-fault]');
+    faultBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const mode = btn.dataset.fault;
+        this.sim?.injectFault(sensor.live, mode);
+        faultBtns.forEach((b) => b.classList.toggle('on', b === btn));
+        this.updateFaultAlert(sensor);
+      });
+    });
+
+    const restoreBtn = this.card.querySelector('[data-fault-restore]');
+    restoreBtn?.addEventListener('click', () => {
+      this.sim?.clearFault(sensor.live);
+      faultBtns.forEach((b) => b.classList.toggle('on', b.dataset.fault === 'none'));
+      this.updateFaultAlert(sensor);
+    });
+
     this.setTab(this.tab);
     this.attachLive(sensor, catColor, false);
+    this.updateFaultAlert(sensor);
 
     const slot = this.card.querySelector('#sensor-preview-slot');
     if (slot) {
@@ -242,6 +356,32 @@ export class Callout {
         onFocus: () => this.onFocusSensor?.(sensor, this.part),
       });
     }
+  }
+
+  updateFaultAlert(sensor) {
+    if (!this.sim) return;
+    const alertBox = this.card.querySelector('[data-fault-alert]');
+    if (!alertBox) return;
+
+    const fault = this.sim.getFault(sensor.live);
+    if (!fault) {
+      alertBox.hidden = true;
+      return;
+    }
+
+    const def = FAULT_MODES[fault.type] || FAULT_MODES.none;
+    alertBox.hidden = false;
+    alertBox.className = `fault-diagnostic-alert ${def.severity}`;
+
+    const badge = alertBox.querySelector('[data-fault-badge]');
+    const code = alertBox.querySelector('[data-fault-code]');
+    const desc = alertBox.querySelector('[data-fault-desc]');
+    const inv = alertBox.querySelector('[data-fault-investigation]');
+
+    if (badge) badge.textContent = `FAULT: ${def.label.toUpperCase()}`;
+    if (code) code.textContent = def.code;
+    if (desc) desc.textContent = def.description;
+    if (inv) inv.textContent = sensor.investigation || def.investigation;
   }
 
   setTab(tab) {
@@ -258,26 +398,41 @@ export class Callout {
 
   attachLive(sensor, color, compact) {
     const q = (k) => this.card.querySelector(`[data-live="${k}"]`);
-    this.live = { sensor, valueEl: q('value'), statusEl: q('status'), ch: CHANNELS[sensor.live] };
+    this.live = {
+      sensor,
+      valueEl: q('value'),
+      statusEl: q('status'),
+      streamEl: q('stream'),
+      ch: CHANNELS[sensor.live],
+    };
     const canvas = q('scope');
     this.scope = this.sim && canvas ? new LiveScope(canvas, this.sim, sensor.live, color, { compact }) : null;
     this._tickAt = 0;
     this.tickLive(performance.now(), true);
   }
 
-  /** Update the live number, alarm state and scope trace. */
+  /** Update live telemetry values, health status, and oscilloscope traces */
   tickLive(now, force = false) {
     if (!this.live || !this.sim) return;
     this.scope?.draw();
-    if (!force && now - this._tickAt < 70) return;
+    if (!force && now - this._tickAt < 65) return;
     this._tickAt = now;
-    const { valueEl, statusEl, ch, sensor } = this.live;
+
+    const { valueEl, statusEl, streamEl, ch, sensor } = this.live;
     const v = this.sim.state[sensor.live];
+
     if (valueEl) valueEl.textContent = this.sim.format(sensor.live);
-    const warn = (ch.warnHi !== undefined && v > ch.warnHi) || (ch.warnLo !== undefined && v < ch.warnLo);
+
+    const status = this.sim.getStatus(sensor.live);
     if (statusEl) {
-      statusEl.textContent = warn ? 'Alarm' : 'Nominal';
-      statusEl.classList.toggle('warn', warn);
+      statusEl.textContent = status.text;
+      statusEl.className = `live-status ${status.severity}`;
+      if (status.fault) statusEl.classList.add('fault');
+    }
+
+    if (streamEl) {
+      const ts = this.sim.getTimestamp();
+      streamEl.textContent = `Lap ${ts.formattedTime} · ${ts.distM}m · 30Hz`;
     }
   }
 
@@ -294,10 +449,11 @@ export class Callout {
 
     const cw = this.card.offsetWidth;
     if (this.card.classList.contains('sensor') && w >= 700) {
-      // never taller than the free space between the toolbars; the tab body scrolls instead
       const fb = freeBounds(h);
-      this.card.style.maxHeight = `${Math.max(240, fb.B - fb.T)}px`;
-    } else this.card.style.maxHeight = '';
+      this.card.style.maxHeight = `${Math.max(260, fb.B - fb.T)}px`;
+    } else {
+      this.card.style.maxHeight = '';
+    }
     const ch = this.card.offsetHeight;
     const gap = 90;
     const L = 16;
@@ -305,7 +461,6 @@ export class Callout {
     const { T, B } = freeBounds(h);
 
     if (!this.pos) {
-      // choose the side with more room
       const roomRight = R - (ax + gap);
       const roomLeft = ax - gap - L;
       this.side = roomRight >= cw ? 1 : roomLeft >= cw ? -1 : roomRight > roomLeft ? 1 : -1;
@@ -315,7 +470,6 @@ export class Callout {
     tx = THREE.MathUtils.clamp(tx, L, Math.max(L, R - cw));
     ty = THREE.MathUtils.clamp(ty, T, Math.max(T, B - ch));
     if (w < 600) {
-      // phones: dock the card above the bottom bar
       tx = (w - cw) / 2;
       ty = Math.max(T, B - ch);
     }
@@ -332,7 +486,6 @@ export class Callout {
       return;
     }
     this.setSvgVisible(true);
-    // leader: anchor -> elbow -> card edge
     const edgeX = ax < this.pos.x + cw / 2 ? this.pos.x : this.pos.x + cw;
     const edgeY = THREE.MathUtils.clamp(ay, this.pos.y + 24, this.pos.y + ch - 24);
     const dir = edgeX > ax ? 1 : -1;

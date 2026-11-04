@@ -1,14 +1,24 @@
 {
-  "name": "f1-regs-explorer",
-  "version": "1.0.0",
-  "description": "Interactive, explodable 3D F1 car explaining the FIA technical regulations",
+  "name": "formula1-sensors-upgraded",
+  "version": "2.0.0",
+  "description": "Interactive 3D Formula 1 Motorsport IoT Telemetry Sensors Explorer Upgraded (Three.js + Vite)",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node scripts/unit-tests.mjs",
+    "test:unit": "node scripts/unit-tests.mjs",
+    "test:e2e": "node scripts/test-runner.mjs"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "formula1",
+    "threejs",
+    "motorsport",
+    "iot",
+    "telemetry",
+    "fia-regulations"
+  ],
+  "author": "Chandan B K",
   "license": "ISC",
   "type": "module",
   "dependencies": {
