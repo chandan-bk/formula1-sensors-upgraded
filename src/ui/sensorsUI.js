@@ -72,7 +72,7 @@ export function initSensorsUI({ state, sensorsManager, sim, onLayerToggle, onSel
       </div>
 
       <div class="sx-scroll">
-        <p class="sx-intro">32 real-time motorsport IoT sensors and telemetry channels connected to the FIA Standard ECU. Select any sensor to inspect physics and live traces.</p>
+        <p class="sx-intro">32 simulated motorsport IoT sensors and telemetry channels connected to the FIA Standard ECU architecture. Select any sensor to inspect physics and live traces.</p>
 
         <section class="sx-lap" aria-label="Simulated lap">
           <canvas class="sx-map" width="248" height="150"></canvas>
@@ -128,8 +128,8 @@ export function initSensorsUI({ state, sensorsManager, sim, onLayerToggle, onSel
           <span class="filter-label">Authority</span>
           <div class="filter-chips" id="auth-filters">
             <button class="sensor-filter-btn active" data-auth="all">All</button>
-            <button class="sensor-filter-btn" data-auth="FIA" title="${esc(SENSOR_AUTHORITIES.FIA.description)}"><i style="background:${SENSOR_AUTHORITIES.FIA.badgeColor}"></i>FIA Mandatory</button>
-            <button class="sensor-filter-btn" data-auth="Team" title="${esc(SENSOR_AUTHORITIES.Team.description)}"><i style="background:${SENSOR_AUTHORITIES.Team.badgeColor}"></i>Team Engineering</button>
+            <button class="sensor-filter-btn" data-auth="FIA" title="${esc(SENSOR_AUTHORITIES.FIA.description)}"><i style="background:${SENSOR_AUTHORITIES.FIA.badgeColor}"></i>FIA Mandated</button>
+            <button class="sensor-filter-btn" data-auth="Team" title="${esc(SENSOR_AUTHORITIES.Team.description)}"><i style="background:${SENSOR_AUTHORITIES.Team.badgeColor}"></i>Team Instrumentation</button>
           </div>
         </div>
 

@@ -27,10 +27,10 @@ npm install
 # Start development server (http://localhost:5173/)
 npm run dev
 
-# Run automated unit test suite (602 automated assertions)
+# Run automated unit test suite (655 automated assertions)
 npm test
 
-# Run browser E2E automated test runner (Headless Chrome/Edge with screenshots)
+# Run browser E2E automated test runner (Headless Chrome/Edge/Chromium with screenshots)
 npm run test:e2e
 
 # Build production bundle
@@ -153,23 +153,28 @@ Each fault displays an attention-grabbing alert banner explaining:
 
 ---
 
-## 5. End-to-End 6-Stage Telemetry Architecture
+## 5. End-to-End 6-Stage Telemetry Architecture & Technical Delineation
 
-The data path tab visualizes the complete signal flow from track to mission control:
+The data path architecture models the complete signal flow from track to mission control across 6 stages with clear delineation between real-world F1 concepts, representative educational models, and in-browser simulation:
 
 ```
-[ Stage 1: Sensing Element ] ➔ Physical transducer or virtual state observer
+[ Stage 1: Sensing Element ] ➔ Physical transducer, actuator feedback, or virtual state estimation
             ▼
-[ Stage 2: Signal Conditioning ] ➔ Differential amplification & 24-bit A/D conversion
+[ Stage 2: Signal Conditioning ] ➔ Differential amplification, anti-aliasing & digitisation
             ▼
-[ Stage 3: Vehicle Network ] ➔ High-speed deterministic CAN-FD & Automotive Ethernet
+[ Stage 3: Vehicle Network ] ➔ Deterministic CAN / CAN-FD & Automotive Ethernet bus architecture
             ▼
-[ Stage 4: Central Processing ] ➔ McLaren Applied TAG-320 SECU & solid-state ADR logger
+[ Stage 4: Central Processing ] ➔ FIA Standard ECU concept (McLaren Applied TAG-320 architecture)
             ▼
-[ Stage 5: Wireless Transmission ] ➔ Encrypted microwave RF antenna (ATLAS telemetry bursts)
+[ Stage 5: Wireless Transmission ] ➔ Microwave car-to-pit wireless telemetry RF streaming
             ▼
-[ Stage 6: Engineering Console ] ➔ Pit wall live oscilloscope traces & strategy analysis
+[ Stage 6: Engineering Console ] ➔ Pit wall live oscilloscope waveforms, HUD & strategy console
 ```
+
+### Architectural Delineation:
+- **Documented F1 Concepts**: Sourced from official FIA Formula 1 Technical Regulations and published team telemetry architecture (TAG-320 ECU, time-triggered buses, non-contact pyrometers, ADR black box).
+- **Representative Educational Model**: The 6-stage telemetry model structure presented in the UI to demonstrate motorsport instrumentation engineering concepts.
+- **In-Browser JavaScript Simulation**: How this application models vehicle dynamics, sensor signal processing, and fault injection in real-time at 30 Hz in the browser DOM and WebGL pipeline.
 
 ---
 
@@ -197,29 +202,36 @@ The repository incorporates automated quality assurance across two complementary
 ```bash
 npm run test:unit
 ```
-Runs **602 automated assertions** validating:
-- 32-sensor catalogue completeness and ID uniqueness
+Runs **655 automated assertions** validating:
+- 32-sensor catalogue completeness and ID uniqueness across all 7 sensor taxonomy classifications
+- Verified authority mapping (FIA-Mandated Scrutineering vs Team Instrumentation)
 - 3D parent part binding and coordinate anchor placement
-- Telemetry channel range consistency and threshold definitions
-- Physical vehicle dynamics coupling and step integration
-- Full lifecycle of all 6 fault injection modes and channel recovery.
+- Telemetry channel range consistency and operating thresholds
+- Physical vehicle dynamics coupling and 30 Hz step integration
+- Full lifecycle of all 6 fault injection modes (disconnected, stuck, noisy, out-of-range, delayed 3.0s buffer lag, intermittent contact bounce)
+- Multiple simultaneous faults and selective channel recovery
+- WebGL 2.0 hardware capability check function and fallback integrity.
 
 ### 2. Browser E2E Integration Tests (CDP Automation)
 ```bash
 npm run test:e2e
 ```
-Launches Vite and headless Chrome/Edge via Chrome DevTools Protocol to verify 14 comprehensive Quality Gates:
-- Application initialization & 3D car procedural assembly
-- Sensor network layer activation and hardware marker generation (55 meshes)
-- Pinned callout card with 360-degree turntable inspector lifecycle
-- Fault injection and recovery UI propagation
-- Prev/Next sensor navigation and guided tour
-- Search input and subsystem/authority filtering
-- Exploded view with sensor marker tracking
-- X-ray translucent chassis inspection mode
-- Active-aero wing flap actuation
-- Three.js resource cleanup (zero geometry and texture leaks)
-- Zero console runtime errors.
+Portable test runner (supporting Windows, macOS, Linux, and `BROWSER_PATH`) that launches Vite and a Chromium browser via Chrome DevTools Protocol to verify **14 distinct Quality Gates**:
+1. Application initialization & 3D car procedural assembly
+2. Sensor network layer activation and hardware marker generation (55 meshes)
+3. Pinned callout card with live telemetry integration
+4. Fixed sensor detail panel internal scrolling (overflow & sticky header)
+5. Draggable sensor panel repositioning with viewport boundary clamping
+6. Control shielding on buttons, canvas and interactive elements
+7. Fault injection and recovery UI propagation (DISCONNECT -> OPEN_CKT -> RESTORE)
+8. Prev/Next sensor navigation and guided tour
+9. Search input and subsystem/authority filtering
+10. Exploded view kinematics with hardware marker tracking
+11. X-Ray translucent chassis inspection mode
+12. Active-aero wing flap actuation & DRS transitions
+13. 360-degree sensor inspector 15-cycle lifecycle & Three.js resource cleanup (zero leaks)
+14. WebGL 2.0 capability check and hardware fallback integrity.
+
 Screenshots are saved automatically into the `screenshots/` directory for visual audit.
 
 ---

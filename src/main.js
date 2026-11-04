@@ -23,33 +23,57 @@ import { createTelemetry } from './data/telemetry.js';
 import { SENSORS } from './data/sensors.js';
 
 /* ------------------------------------------------------------------ */
-/* Renderer, scene, camera                                            */
+/* WebGL 2.0 Capability Check & Hardware Fallback                     */
 /* ------------------------------------------------------------------ */
 
-function checkWebGL() {
+export function checkWebGL2Support() {
   try {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return false;
     const c = document.createElement('canvas');
-    return !!(window.WebGLRenderingContext && (c.getContext('webgl') || c.getContext('experimental-webgl')));
+    return !!(window.WebGL2RenderingContext && c.getContext('webgl2'));
   } catch (e) {
     return false;
   }
 }
 
-if (!checkWebGL()) {
-  const loading = document.getElementById('loading');
-  if (loading) loading.style.display = 'none';
-  const errDiv = document.createElement('div');
-  errDiv.className = 'webgl-fallback';
-  errDiv.innerHTML = `
-    <div style="position:fixed;inset:0;background:#0d0e12;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;z-index:999999;font-family:system-ui,sans-serif;">
-      <h2 style="color:#ff1744;margin-bottom:12px;">⚠️ WebGL Hardware Acceleration Required</h2>
-      <p style="max-width:540px;line-height:1.6;color:#c4c9ce;margin-bottom:16px;">The Formula 1 3D Sensor Explorer utilizes Three.js shaders and procedural geometry requiring WebGL support.</p>
-      <p style="font-size:13px;color:#8e9297;">Please enable hardware acceleration in your browser settings or try an updated modern browser.</p>
-    </div>
-  `;
-  document.body.appendChild(errDiv);
+const isWebGL2Supported = checkWebGL2Support();
+if (typeof window !== 'undefined') {
+  window.__f1_webgl_supported = isWebGL2Supported;
+  window.checkWebGL2Support = checkWebGL2Support;
 }
 
+if (!isWebGL2Supported) {
+  if (typeof document !== 'undefined') {
+    const loading = document.getElementById('loading');
+    if (loading) loading.style.display = 'none';
+    const errDiv = document.createElement('div');
+    errDiv.className = 'webgl-fallback';
+    errDiv.innerHTML = `
+      <div style="position:fixed;inset:0;background:#0d0e12;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;z-index:999999;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+        <div style="display:inline-block;padding:6px 14px;border-radius:4px;background:rgba(225,6,0,0.15);border:1px solid #E10600;color:#E10600;font-weight:700;font-size:11px;letter-spacing:1px;text-transform:uppercase;margin-bottom:16px;">
+          Hardware Acceleration Required
+        </div>
+        <h2 style="color:#ffffff;margin-bottom:12px;font-size:22px;font-weight:700;">WebGL 2.0 Graphics Pipeline Required</h2>
+        <p style="max-width:540px;line-height:1.6;color:#c4c9ce;margin-bottom:20px;font-size:14px;">
+          The Formula 1 3D Sensor Explorer utilizes Three.js r186 procedural shaders, dynamic shadow mapping, and post-processing pipelines requiring WebGL 2.0 support.
+        </p>
+        <div style="background:#16171d;border:1px solid #2a2c35;border-radius:8px;padding:16px 20px;max-width:480px;text-align:left;margin-bottom:20px;font-size:13px;color:#8e9297;line-height:1.6;">
+          <b style="color:#eeece9;">Troubleshooting Steps:</b>
+          <ol style="margin:8px 0 0 18px;padding:0;">
+            <li>Enable <i>Hardware Acceleration</i> in your browser settings.</li>
+            <li>Ensure your browser is up to date (Chrome 110+, Edge 110+, Firefox 110+, Safari 16.4+).</li>
+            <li>Verify your graphics driver supports WebGL2 / OpenGL ES 3.0+.</li>
+          </ol>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(errDiv);
+  }
+} else {
+  initApplication();
+}
+
+function initApplication() {
 const stage = document.getElementById('stage');
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -940,3 +964,4 @@ window.__f1 = {
     render();
   },
 };
+}

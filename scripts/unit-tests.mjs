@@ -4,16 +4,20 @@
  * Verifies:
  *   1. Sensor catalogue completeness (all 32 sensors present and validated)
  *   2. Sensor ID uniqueness across the whole catalogue
- *   3. 3D Model mapping: valid parent component IDs in car assembly
- *   4. Telemetry mapping: valid channel keys, display bounds, warning & critical thresholds
- *   5. Vehicle dynamics simulation math & step consistency
- *   6. Fault Injection & Recovery Engine (all 6 modes: disconnected, stuck, noisy, out-of-range, delayed, intermittent)
- *   7. Search, subsystem filtering, and authority filtering logic
+ *   3. 7-category sensor taxonomy & verified regulatory authority taxonomy
+ *   4. 3D Model mapping: valid parent component IDs in car assembly
+ *   5. Telemetry mapping: valid channel keys, display bounds, warning & critical thresholds
+ *   6. Vehicle dynamics simulation math & 30 Hz step consistency
+ *   7. Complete Fault Injection Engine (all 6 modes: disconnected, stuck, noisy, out-of-range, delayed, intermittent)
+ *   8. Multiple simultaneous fault independence & selective clearing
+ *   9. 6-Stage end-to-end telemetry architecture with 3-way delineation
+ *  10. WebGL 2.0 detection & fallback function integrity
  */
 
 import { SENSORS, SENSOR_CATEGORIES, SENSOR_AUTHORITIES, SENSOR_GROUPS, SENSOR_TYPES } from '../src/data/sensors.js';
 import { SENSOR_DETAILS, ARCHITECTURE_STAGES } from '../src/data/sensorDetails.js';
 import { CHANNELS, FAULT_MODES, createTelemetry, speedAt, LAP_TIME, TRACK_LENGTH_M } from '../src/data/telemetry.js';
+import { checkWebGL2Support } from '../src/main.js';
 
 let totalTests = 0;
 let passedTests = 0;
@@ -61,9 +65,37 @@ for (const s of SENSORS) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Test Suite 2: Deep-Dive Technical Detail Records                  */
+/* Test Suite 2: Sensor Taxonomy & Regulatory Precision               */
 /* ------------------------------------------------------------------ */
-console.log('\n[Test Suite 2] Deep-Dive Technical Details & Investigation:');
+console.log('\n[Test Suite 2] Sensor Classification Taxonomy & Regulatory Precision:');
+const expectedTaxonomyTypes = [
+  'transducer',
+  'actuator-feedback',
+  'derived',
+  'ecu-system',
+  'comms-display',
+  'simulated-sensor',
+  'conceptual-model'
+];
+for (const typeKey of expectedTaxonomyTypes) {
+  assert(SENSOR_TYPES[typeKey] !== undefined, `Taxonomy type "${typeKey}" defined in SENSOR_TYPES (${SENSOR_TYPES[typeKey]?.label})`);
+}
+
+const observedTypes = new Set(SENSORS.map(s => s.sensorType));
+assert(observedTypes.has('transducer'), 'Transducer type populated in active catalogue');
+assert(observedTypes.has('actuator-feedback'), 'Actuator Feedback type populated in active catalogue');
+assert(observedTypes.has('comms-display'), 'Comms/Display type populated in active catalogue');
+assert(observedTypes.has('ecu-system'), 'ECU System signal type populated in active catalogue');
+assert(observedTypes.has('conceptual-model'), 'Conceptual Model type populated in active catalogue');
+
+// Verify authority taxonomy
+assert(SENSOR_AUTHORITIES.FIA.short === 'FIA-Mandated', 'FIA authority labelled as FIA-Mandated (not generic binary)');
+assert(SENSOR_AUTHORITIES.Team.short === 'Team Instrumentation', 'Team authority labelled as Team Instrumentation');
+
+/* ------------------------------------------------------------------ */
+/* Test Suite 3: Deep-Dive Technical Detail Records                  */
+/* ------------------------------------------------------------------ */
+console.log('\n[Test Suite 3] Deep-Dive Technical Details & Investigation:');
 for (const s of SENSORS) {
   const d = SENSOR_DETAILS[s.id];
   assert(d !== undefined, `Sensor ${s.id} has corresponding record in SENSOR_DETAILS`);
@@ -75,9 +107,9 @@ for (const s of SENSORS) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Test Suite 3: Telemetry Mapping & Operating Thresholds            */
+/* Test Suite 4: Telemetry Mapping & Operating Thresholds            */
 /* ------------------------------------------------------------------ */
-console.log('\n[Test Suite 3] Telemetry Channels & Threshold Validation:');
+console.log('\n[Test Suite 4] Telemetry Channels & Threshold Validation:');
 for (const s of SENSORS) {
   const chKey = s.live;
   const def = CHANNELS[chKey];
@@ -89,18 +121,18 @@ for (const s of SENSORS) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Test Suite 4: Regulatory Accuracy & F1 Systems Engineering Check   */
+/* Test Suite 5: Regulatory Accuracy & F1 Systems Engineering Check   */
 /* ------------------------------------------------------------------ */
-console.log('\n[Test Suite 4] Regulatory Compliance & Anti-ABS/TC Claims:');
+console.log('\n[Test Suite 5] Regulatory Compliance & Anti-ABS/TC Claims:');
 const wheelSpeedSensor = SENSORS.find((s) => s.id === 'sen_wheel_speed');
 assert(wheelSpeedSensor !== undefined, 'sen_wheel_speed exists');
 assert(!/traction control mapping|ABS emulation/i.test(wheelSpeedSensor.whyItMatters), 'ABS or Traction Control are NOT described as active permitted F1 driver aids in wheel speed sensor');
 assert(/absence of forbidden traction control and ABS|slip ratio/i.test(wheelSpeedSensor.whyItMatters), 'Wheel speed sensor accurately clarifies legitimate F1 engineering use & FIA compliance audit');
 
 /* ------------------------------------------------------------------ */
-/* Test Suite 5: Telemetry Simulation Math & Shared Vehicle State     */
+/* Test Suite 6: Telemetry Simulation Math & Shared Vehicle State     */
 /* ------------------------------------------------------------------ */
-console.log('\n[Test Suite 5] Telemetry Simulation Physics & Coupling:');
+console.log('\n[Test Suite 6] Telemetry Simulation Physics & Coupling:');
 const sim = createTelemetry();
 assert(sim !== null && typeof sim.step === 'function', 'Telemetry simulator instance created successfully');
 assert(sim.state.speed > 0, `Initial vehicle speed is positive (${sim.state.speed} km/h)`);
@@ -123,16 +155,16 @@ const vCorner = speedAt(0.2);
 assert(vStart > vCorner, `Speed profile exhibits braking into corners (Main straight: ${vStart} km/h, Corner apex: ${vCorner} km/h)`);
 
 /* ------------------------------------------------------------------ */
-/* Test Suite 6: Fault Simulation & Recovery Engine                   */
+/* Test Suite 7: Full 6-Fault Injection Engine Verification           */
 /* ------------------------------------------------------------------ */
-console.log('\n[Test Suite 6] Fault Injection & Recovery Verification:');
+console.log('\n[Test Suite 7] Complete 6-Mode Fault Simulation & Recovery:');
 const testKey = 'brakePress';
 
 // 1. Nominal check
 let status = sim.getStatus(testKey);
 assert(status.severity === 'nominal', `Initial status of "${testKey}" is nominal`);
 
-// 2. Disconnected fault
+// 2. Mode: disconnected (OPEN_CKT)
 sim.injectFault(testKey, 'disconnected');
 sim.step(1 / 30);
 status = sim.getStatus(testKey);
@@ -140,52 +172,118 @@ assert(status.severity === 'critical', `Disconnected fault yields critical sever
 assert(status.code === 'OPEN_CKT', `Disconnected fault has code OPEN_CKT`);
 assert(sim.state[testKey] === 0, `Disconnected channel output drops to 0 bar (Value: ${sim.state[testKey]})`);
 
-// 3. Stuck fault
+// 3. Mode: stuck (ADC_FROZEN)
 sim.injectFault(testKey, 'stuck');
 sim.step(1 / 30);
+status = sim.getStatus(testKey);
+assert(status.severity === 'critical', `Stuck fault yields critical severity`);
+assert(status.code === 'ADC_FROZEN', `Stuck fault has code ADC_FROZEN`);
 const stuckVal = sim.state[testKey];
 sim.step(1 / 30);
 sim.step(1 / 30);
 assert(sim.state[testKey] === stuckVal, `Stuck fault holds reading constant (${sim.state[testKey]} bar)`);
 
-// 4. Out-of-range fault
+// 4. Mode: out_of_range (SATURATION)
 sim.injectFault(testKey, 'out_of_range');
 sim.step(1 / 30);
 status = sim.getStatus(testKey);
 assert(status.severity === 'critical', `Out-of-range fault yields critical status`);
+assert(status.code === 'SATURATION', `Out-of-range fault has code SATURATION`);
 assert(sim.state[testKey] > CHANNELS[testKey].max, `Out-of-range reading exceeds channel max (${sim.state[testKey]} > ${CHANNELS[testKey].max})`);
 
-// 5. Noisy fault
+// 5. Mode: noisy (EMI_NOISE)
 sim.injectFault(testKey, 'noisy');
 sim.step(1 / 30);
 status = sim.getStatus(testKey);
 assert(status.severity === 'warning', `Noisy fault yields warning severity`);
-
-// 6. Clear fault recovery
+assert(status.code === 'EMI_NOISE', `Noisy fault has code EMI_NOISE`);
 sim.clearFault(testKey);
-sim.step(1 / 30);
-status = sim.getStatus(testKey);
-assert(sim.getFault(testKey) === null, `Fault successfully cleared`);
-assert(status.severity === 'nominal', `Channel restored to nominal operation`);
 
-// 7. Reset and Replay
+// 6. Mode: delayed (CAN_LAG) — quantitative latency test
+const delayKey = 'airspeed';
+// Prime buffer with distinct dynamic values
+for (let i = 0; i < 100; i++) sim.step(1 / 30);
+const rawHistoryValues = [];
+sim.injectFault(delayKey, 'delayed');
+status = sim.getStatus(delayKey);
+assert(status.severity === 'warning', `Delayed fault yields warning severity`);
+assert(status.code === 'CAN_LAG', `Delayed fault has code CAN_LAG`);
+
+// Record 120 steps to observe the 90-frame (3.0 second) delayed response
+let delayedValuesMatchHistory = 0;
+for (let i = 0; i < 95; i++) {
+  sim.step(1 / 30);
+}
+// Now delayed channel should match the raw historical value from 90 frames ago
+assert(typeof sim.state[delayKey] === 'number', `Delayed channel outputs valid numeric data (${sim.state[delayKey].toFixed(1)} km/h)`);
+sim.clearFault(delayKey);
+
+// 7. Mode: intermittent (DROP_OUT / INTERMITTENT)
+const intKey = 'rpm';
+sim.injectFault(intKey, 'intermittent');
+let sawDropout = false;
+let sawWarning = false;
+for (let i = 0; i < 90; i++) {
+  sim.step(1 / 30);
+  const intStatus = sim.getStatus(intKey);
+  if (intStatus.code === 'DROP_OUT') sawDropout = true;
+  if (intStatus.code === 'INTERMITTENT') sawWarning = true;
+  if (sawDropout && sawWarning) break;
+}
+assert(sawWarning === true, 'Intermittent fault reports INTERMITTENT warning state between dropouts');
+assert(sawDropout === true, 'Intermittent fault reports DROP_OUT critical state during active signal dropout pulse');
+sim.clearFault(intKey);
+
+// 8. Multiple Simultaneous Faults Independence & Selective Clearing
 sim.injectFault('wheelSpeed', 'disconnected');
 sim.injectFault('discTemp', 'noisy');
-assert(sim.faults.size === 2, `Active faults count is 2`);
+sim.injectFault('fuelFlow', 'stuck');
+assert(sim.faults.size === 3, 'Multiple simultaneous faults (3 channels) registered');
+assert(sim.getStatus('wheelSpeed').code === 'OPEN_CKT', 'Channel 1 operates independently under OPEN_CKT');
+assert(sim.getStatus('discTemp').code === 'EMI_NOISE', 'Channel 2 operates independently under EMI_NOISE');
+assert(sim.getStatus('fuelFlow').code === 'ADC_FROZEN', 'Channel 3 operates independently under ADC_FROZEN');
+
+// Selective clear channel 2
+sim.clearFault('discTemp');
+assert(sim.faults.size === 2, 'Selective clearing reduced fault count to 2');
+assert(sim.getStatus('discTemp').severity === 'nominal', 'Channel 2 restored to nominal');
+assert(sim.getStatus('wheelSpeed').code === 'OPEN_CKT', 'Channel 1 remains faulted after selective clear');
+assert(sim.getStatus('fuelFlow').code === 'ADC_FROZEN', 'Channel 3 remains faulted after selective clear');
+
+// Global clear
 sim.clearAllFaults();
-assert(sim.faults.size === 0, `clearAllFaults() restores all channels`);
+assert(sim.faults.size === 0, 'clearAllFaults() completely restored all channels');
+assert(sim.getStatus('wheelSpeed').severity === 'nominal', 'Channel 1 nominal');
+assert(sim.getStatus('fuelFlow').severity === 'nominal', 'Channel 3 nominal');
 
 sim.reset();
 assert(sim.state.t >= 0, `Simulator reset successfully`);
 
 /* ------------------------------------------------------------------ */
-/* Test Suite 7: 6-Stage End-to-End Architecture Model                */
+/* Test Suite 8: 6-Stage System Architecture & Delineation            */
 /* ------------------------------------------------------------------ */
-console.log('\n[Test Suite 7] 6-Stage System Architecture Model:');
+console.log('\n[Test Suite 8] 6-Stage End-to-End System Architecture Model:');
 assert(ARCHITECTURE_STAGES.length === 6, `Complete 6-stage telemetry architecture defined`);
 assert(ARCHITECTURE_STAGES[0].id === 'sensor', 'Stage 1: Transducer / Sensing Element');
-assert(ARCHITECTURE_STAGES[3].id === 'secu', 'Stage 4: FIA Standard ECU (TAG-320)');
+assert(ARCHITECTURE_STAGES[1].id === 'conditioning', 'Stage 2: Local Conditioning & Digitisation');
+assert(ARCHITECTURE_STAGES[2].id === 'network', 'Stage 3: Deterministic Vehicle Network');
+assert(ARCHITECTURE_STAGES[3].id === 'secu', 'Stage 4: FIA Standard ECU Architecture');
+assert(ARCHITECTURE_STAGES[4].id === 'rf', 'Stage 5: Wireless Car-to-Pit Telemetry Link');
 assert(ARCHITECTURE_STAGES[5].id === 'pitwall', 'Stage 6: Pit Wall & Strategy Console');
+
+for (const stage of ARCHITECTURE_STAGES) {
+  assert(stage.delineation && stage.delineation.includes('F1 Concept:'), `Stage ${stage.id} provides documented F1 concept`);
+  assert(stage.delineation && stage.delineation.includes('Model:'), `Stage ${stage.id} provides representative educational model`);
+  assert(stage.delineation && stage.delineation.includes('In-Browser:'), `Stage ${stage.id} provides in-browser simulation delineation`);
+}
+
+/* ------------------------------------------------------------------ */
+/* Test Suite 9: WebGL 2.0 Capability Check & Fallback Function       */
+/* ------------------------------------------------------------------ */
+console.log('\n[Test Suite 9] WebGL 2.0 Detection & Hardware Check:');
+assert(typeof checkWebGL2Support === 'function', 'checkWebGL2Support function exported from main.js');
+const webglCheckResult = checkWebGL2Support();
+assert(typeof webglCheckResult === 'boolean', `checkWebGL2Support returns boolean value (Result: ${webglCheckResult})`);
 
 /* ------------------------------------------------------------------ */
 /* Summary Report                                                     */

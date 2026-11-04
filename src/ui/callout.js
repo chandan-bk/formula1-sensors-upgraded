@@ -345,8 +345,8 @@ export class Callout {
         </div>` : ''}
         <div class="cat-row">
           <span class="cat"><i style="background:${catColor}"></i>${esc(cat.short)}<span class="cat-sep">in</span>${esc(group?.label ?? '')}</span>
-          <span class="sensor-auth-badge" style="background:${authColor}22; color:${authColor}; border:1px solid ${authColor}55;" title="${esc(auth.description)}">
-            ${esc(sensor.authority === 'FIA' ? 'FIA Mandatory' : 'Team Engineering')}
+          <span class="sensor-auth-badge" style="background:${authColor}22; color:${authColor}; border:1px solid ${authColor}55;" title="${esc(auth?.description || '')}">
+            ${esc(auth?.short || (sensor.authority === 'FIA' ? 'FIA-Mandated' : 'Team Instrumentation'))}
           </span>
           <span class="sensor-type-pill" title="${esc(typeDef.description)}">
             ${esc(typeDef.label)}

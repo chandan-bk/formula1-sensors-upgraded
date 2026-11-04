@@ -440,6 +440,12 @@ export function mountSensorPreview(containerEl, sensorId, { onFocus } = {}) {
     previewScene.add(previewGroup);
   }
 
+  // Ensure previewGroup exists in previewScene
+  if (!previewGroup) {
+    previewGroup = new THREE.Group();
+    if (previewScene) previewScene.add(previewGroup);
+  }
+
   // Clear previous preview model (and the listeners of the previous mount)
   detachListeners();
   disposeGroup(previewGroup);
@@ -563,7 +569,7 @@ export function mountSensorPreview(containerEl, sensorId, { onFocus } = {}) {
 }
 
 /**
- * Stop preview animation loop when card is closed.
+ * Stop preview animation loop and release 3D preview assets when card is closed.
  */
 export function unmountSensorPreview() {
   if (animFrameId) {
@@ -572,6 +578,9 @@ export function unmountSensorPreview() {
   }
   isDragging = false;
   detachListeners();
+  if (previewGroup) {
+    disposeGroup(previewGroup);
+  }
 }
 
 function detachListeners() {

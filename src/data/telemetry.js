@@ -755,8 +755,9 @@ export function createTelemetry() {
             break;
           }
           case 'intermittent': {
-            // Signal drops to 0 periodically for 0.25s every 0.8s
+            // Signal drops to 0 periodically for ~0.25s every 0.8s
             const drop = (Math.sin(s.t * 7.5 + k.length) > 0.55);
+            fault.inDropout = drop;
             if (drop) val = def.min <= 0 && def.max > 0 ? 0 : def.min;
             break;
           }
@@ -866,6 +867,15 @@ export function createTelemetry() {
 
     const fault = faults.get(channelKey);
     if (fault) {
+      if (fault.type === 'intermittent' && fault.inDropout) {
+        return {
+          status: 'FAULT: Signal Dropout (Contact Bounce)',
+          severity: 'critical',
+          text: 'Signal Dropout',
+          code: 'DROP_OUT',
+          fault,
+        };
+      }
       const mode = FAULT_MODES[fault.type];
       return {
         status: `FAULT: ${mode.label}`,

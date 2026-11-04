@@ -29,25 +29,61 @@ export const SENSOR_GROUPS = [
   { id: 'comms', label: 'Electronics & Telemetry', blurb: 'SECU central brain, bus architecture, and car-to-pit radio links.' },
 ];
 
-/* 6-Stage End-to-End Motorsport IoT Architecture Definition */
+/* 6-Stage End-to-End Motorsport IoT Architecture Model */
 export const ARCHITECTURE_STAGES = [
-  { id: 'sensor', label: 'Stage 1: Transducer / Sensing Element', type: 'Physical / Virtual', desc: 'Direct physical measurement (piezoresistive, optical, strain-gauge, RTD) or virtual state estimation.' },
-  { id: 'conditioning', label: 'Stage 2: Local Acquisition & A/D', type: 'Local Conditioning', desc: 'Differential amplification, anti-alias hardware filtering, and high-speed analog-to-digital conversion.' },
-  { id: 'network', label: 'Stage 3: High-Speed Vehicle Network', type: 'Bus Protocol', desc: 'Deterministic CAN-FD (1–5 Mbps) or Automotive Ethernet sub-network carrying prioritized telemetry frames.' },
-  { id: 'secu', label: 'Stage 4: FIA Standard ECU (TAG-320)', type: 'Central Compute', desc: 'Central processing hub running FIA-certified control laws, real-time safety checks, and solid-state crash logging.' },
-  { id: 'rf', label: 'Stage 5: Microwave Car-to-Pit Link', type: 'Wireless Telemetry', desc: 'Encrypted bidirectional RF transmission (ATLAS data stream) broadcasting vehicle state to trackside receivers.' },
-  { id: 'pitwall', label: 'Stage 6: Pit Wall & Strategy Console', type: 'Engineering Interface', desc: 'Real-time telemetry analysis console displaying live oscilloscope traces, alarms, and strategy algorithms.' },
+  {
+    id: 'sensor',
+    label: 'Stage 1: Transducer / Sensing Element',
+    type: 'Physical / Virtual',
+    desc: 'Representative physical sensor measurement (piezoresistive, optical, strain-gauge, RTD) or virtual state estimation.',
+    delineation: 'F1 Concept: Direct transducer contact or optical pickup. Model: Physics-based parameters in telemetry.js. In-Browser: 30 Hz numerical simulation loop.',
+  },
+  {
+    id: 'conditioning',
+    label: 'Stage 2: Local Conditioning & Digitisation',
+    type: 'Local Conditioning',
+    desc: 'Differential amplification, anti-alias hardware filtering, and analog-to-digital conversion in local sub-nodes.',
+    delineation: 'F1 Concept: Aerospace-grade signal conditioning ASICs. Model: Calibrated transfer functions with noise/jitter. In-Browser: Floating-point conversion.',
+  },
+  {
+    id: 'network',
+    label: 'Stage 3: Deterministic Vehicle Network',
+    type: 'Bus Architecture',
+    desc: 'Deterministic CAN / CAN-FD or Automotive Ethernet sub-network carrying prioritized telemetry frames.',
+    delineation: 'F1 Concept: Time-triggered aerospace CAN-FD buses. Model: Frame-rate message routing with latency/jitter. In-Browser: Ring-buffer state queues.',
+  },
+  {
+    id: 'secu',
+    label: 'Stage 4: FIA Standard ECU Architecture',
+    type: 'Central Compute Hub',
+    desc: 'Standardized central processing hub running FIA-certified control laws, safety checks, and official scrutineering logging.',
+    delineation: 'F1 Concept: McLaren Applied TAG-320 running standard FIA software. Model: Closed-loop powertrain and BBW simulation. In-Browser: JavaScript event and state loops.',
+  },
+  {
+    id: 'rf',
+    label: 'Stage 5: Wireless Car-to-Pit Telemetry Link',
+    type: 'RF Telemetry',
+    desc: 'Bidirectional wireless microwave RF telemetry streaming vehicle health and performance data to trackside antennas.',
+    delineation: 'F1 Concept: Encrypted UHF/microwave link with burst repeaters. Model: RSSI attenuation and packet drop simulation. In-Browser: Real-time UI data piping.',
+  },
+  {
+    id: 'pitwall',
+    label: 'Stage 6: Pit Wall & Strategy Console',
+    type: 'Engineering Interface',
+    desc: 'Trackside telemetry analysis console displaying real-time waveforms, alarm thresholds, and strategy algorithms.',
+    delineation: 'F1 Concept: Trackside ATLAS analysis software. Model: Interactive oscilloscope and live HUD. In-Browser: SVG scopes, WebGL rendering and DOM UI.',
+  },
 ];
 
 /* Stage notes matched by keyword */
 const NODE_NOTES = [
-  [/SECU|ECU|TAG-320/i, 'FIA Standard ECU (McLaren Applied TAG-320). Central control unit executing FIA-audited control software and logging official scrutineering channels.'],
-  [/CAN|CAN-FD|bus/i, 'High-speed deterministic CAN-FD or Automotive Ethernet bus. Messages carry prioritized arbitration IDs with hardware CRC error detection.'],
-  [/RF|433|radio|BLE|wireless|Bluetooth/i, 'Short-range wireless hop (433 MHz rim link, 2.4 GHz driver glove BLE) bridging spinning or wearable components without slip rings.'],
-  [/harness|loom|sub-loom/i, 'Shielded aerospace Raychem wiring loom. Twisted shielded pairs and 360-degree backshell grounding isolate signals from 900V hybrid EMI.'],
-  [/analog|analogue|0-5V|SPI|serial/i, 'Low-latency direct electrical connection (0–5 V or differential SPI) providing microsecond-level response times directly to the ADC.'],
-  [/telemetry|logger|broadcast|transmitter|trackside/i, 'Live telemetry streaming to trackside antennas via encrypted microwave protocol, logging over 2,500 parameters simultaneously.'],
-  [/amplifier|transducer|conditioner|counter|inverter|ASIC|MCU|node/i, 'Front-end signal conditioning node. Filters high-frequency noise and amplifies micro-volt signals into calibrated digital data.'],
+  [/SECU|ECU|TAG-320/i, 'FIA Standard ECU concept (McLaren Applied TAG-320 architecture). Central vehicle computer executing FIA-audited control software and logging scrutineering data (represented in this simulation by central telemetry state management).'],
+  [/CAN|CAN-FD|bus/i, 'Deterministic CAN / CAN-FD or Automotive Ethernet bus protocol concept. Carries prioritized arbitration IDs with hardware CRC error detection (simulated via message queues).'],
+  [/RF|433|radio|BLE|wireless|Bluetooth/i, 'Short-range wireless hop concept (433 MHz rim link, 2.4 GHz driver glove BLE) bridging rotating or wearable components without slip rings.'],
+  [/harness|loom|sub-loom/i, 'Shielded aerospace Raychem wiring loom concept. Twisted shielded pairs isolate signals from high-voltage hybrid EMI.'],
+  [/analog|analogue|0-5V|SPI|serial/i, 'Low-latency analog/SPI connection concept providing direct signal response to local acquisition nodes.'],
+  [/telemetry|logger|broadcast|transmitter|trackside/i, 'Live car-to-pit wireless telemetry stream concept, broadcasting vehicle dynamics parameters to trackside engineering stations.'],
+  [/amplifier|transducer|conditioner|counter|inverter|ASIC|MCU|node/i, 'Front-end signal conditioning node concept. Filters electrical noise and amplifies micro-volt signals into calibrated digital parameters.'],
 ];
 
 export function explainStage(label, custom) {
