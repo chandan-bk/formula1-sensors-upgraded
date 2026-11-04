@@ -25,6 +25,8 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
  *   - 32 Motorsport IoT Sensors with Live Telemetry, Scope Traces, and Interactive Fault Simulation
  *   - 360-degree Turntable 3D Inspector
  *   - End-to-End 6-Stage Telemetry Architecture Visualizer
+ *   - Internal smooth scrolling with sticky header and pinned close button
+ *   - Smooth draggable repositioning clamped within browser viewport
  */
 export class Callout {
   constructor({ card, svg, camera, renderer, onClose, onFocusSensor, onNavigate, sim }) {
@@ -44,6 +46,8 @@ export class Callout {
     this.infoId = null;
     this.anchorLocal = new THREE.Vector3();
     this.pos = null;
+    this.draggedPos = null;
+    this.isDragging = false;
     this.side = 1;
     this.visible = false;
 
@@ -57,10 +61,175 @@ export class Callout {
     this.ring.setAttribute('r', '6');
     svg.append(this.path, this.ring, this.dot);
     this.setSvgVisible(false);
+
+    this.setupDraggable();
   }
 
   setSvgVisible(v) {
     for (const el of [this.path, this.dot, this.ring]) el.style.display = v ? '' : 'none';
+  }
+
+  setupDraggable() {
+    let startX = 0;
+    let startY = 0;
+    let origX = 0;
+    let origY = 0;
+    let dragging = false;
+    let pointerCaptured = false;
+    let activePointerId = null;
+
+    const onPointerDown = (e) => {
+      // Only drag pinned, visible panels
+      if (!this.pinned || !this.visible) return;
+      // Primary mouse button or touch
+      if (e.button !== undefined && e.button !== 0) return;
+
+      // Do not initiate drag from interactive controls
+      if (e.target.closest('button, a, input, select, textarea, canvas, .no-drag, [role="tab"]')) {
+        return;
+      }
+
+      // Must be initiated from the card header
+      const header = e.target.closest('.card-header');
+      if (!header) return;
+
+      const rect = this.card.getBoundingClientRect();
+      startX = e.clientX;
+      startY = e.clientY;
+      origX = this.pos?.x ?? rect.left;
+      origY = this.pos?.y ?? rect.top;
+      activePointerId = e.pointerId;
+
+      const onPointerMove = (ev) => {
+        if (ev.pointerId !== activePointerId) return;
+        const dx = ev.clientX - startX;
+        const dy = ev.clientY - startY;
+
+        if (!dragging) {
+          // Threshold to prevent accidental drags during plain clicks
+          if (Math.hypot(dx, dy) < 4) return;
+          dragging = true;
+          this.isDragging = true;
+          this.card.classList.add('is-dragging');
+          document.body.classList.add('callout-dragging-active');
+          window.getSelection()?.removeAllRanges();
+          try {
+            header.setPointerCapture(activePointerId);
+            pointerCaptured = true;
+          } catch (_) {}
+        }
+
+        const cw = this.card.offsetWidth;
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        const fb = freeBounds(h);
+
+        const L = 12;
+        const R = w - 12;
+        const minX = L;
+        const maxX = Math.max(L, R - cw);
+        const minY = Math.max(12, fb.T - 20);
+        const minCardH = 260;
+        const maxY = Math.max(minY, fb.B - minCardH);
+
+        let nx = origX + dx;
+        let ny = origY + dy;
+
+        nx = THREE.MathUtils.clamp(nx, minX, maxX);
+        ny = THREE.MathUtils.clamp(ny, minY, maxY);
+
+        this.draggedPos = { x: nx, y: ny };
+        this.pos = { x: nx, y: ny };
+
+        const maxH = Math.max(minCardH, fb.B - ny);
+        this.card.style.maxHeight = `${maxH}px`;
+        this.card.style.left = `${nx.toFixed(1)}px`;
+        this.card.style.top = `${ny.toFixed(1)}px`;
+
+        this.updateLeaderLineDirect();
+      };
+
+      const onPointerUp = (ev) => {
+        if (ev.pointerId !== activePointerId) return;
+        if (dragging) {
+          dragging = false;
+          this.isDragging = false;
+          this.card.classList.remove('is-dragging');
+          document.body.classList.remove('callout-dragging-active');
+          if (pointerCaptured) {
+            try {
+              header.releasePointerCapture(ev.pointerId);
+            } catch (_) {}
+            pointerCaptured = false;
+          }
+        }
+        activePointerId = null;
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerup', onPointerUp);
+        window.removeEventListener('pointercancel', onPointerUp);
+      };
+
+      window.addEventListener('pointermove', onPointerMove);
+      window.addEventListener('pointerup', onPointerUp);
+      window.addEventListener('pointercancel', onPointerUp);
+    };
+
+    this.card.addEventListener('pointerdown', onPointerDown);
+
+    window.addEventListener('resize', () => {
+      if (!this.visible || !this.pos) return;
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const cw = this.card.offsetWidth;
+      const fb = freeBounds(h);
+      const L = 12;
+      const R = w - 12;
+      const minX = L;
+      const maxX = Math.max(L, R - cw);
+      const minY = Math.max(12, fb.T - 20);
+      const minCardH = 260;
+      const maxY = Math.max(minY, fb.B - minCardH);
+
+      if (this.draggedPos) {
+        this.draggedPos.x = THREE.MathUtils.clamp(this.draggedPos.x, minX, maxX);
+        this.draggedPos.y = THREE.MathUtils.clamp(this.draggedPos.y, minY, maxY);
+        this.pos = { x: this.draggedPos.x, y: this.draggedPos.y };
+      } else {
+        this.pos.x = THREE.MathUtils.clamp(this.pos.x, minX, maxX);
+        this.pos.y = THREE.MathUtils.clamp(this.pos.y, minY, maxY);
+      }
+      const curY = this.pos.y;
+      this.card.style.maxHeight = `${Math.max(minCardH, fb.B - curY)}px`;
+      this.card.style.left = `${this.pos.x.toFixed(1)}px`;
+      this.card.style.top = `${this.pos.y.toFixed(1)}px`;
+    });
+  }
+
+  updateLeaderLineDirect() {
+    if (!this.visible || !this.part || !this.pos) return;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const world = this.part.localToWorld(this.anchorLocal.clone());
+    const ndc = world.clone().project(this.camera);
+    const behind = ndc.z > 1;
+    if (behind) {
+      this.setSvgVisible(false);
+      return;
+    }
+    this.setSvgVisible(true);
+    const ax = (ndc.x * 0.5 + 0.5) * w;
+    const ay = (-ndc.y * 0.5 + 0.5) * h;
+    const cw = this.card.offsetWidth;
+    const ch = this.card.offsetHeight;
+    const edgeX = ax < this.pos.x + cw / 2 ? this.pos.x : this.pos.x + cw;
+    const edgeY = THREE.MathUtils.clamp(ay, this.pos.y + 24, this.pos.y + ch - 24);
+    const dir = edgeX > ax ? 1 : -1;
+    const elbowX = edgeX - dir * 28;
+    this.path.setAttribute('d', `M${ax},${ay} L${elbowX},${edgeY} L${edgeX},${edgeY}`);
+    this.dot.setAttribute('cx', ax);
+    this.dot.setAttribute('cy', ay);
+    this.ring.setAttribute('cx', ax);
+    this.ring.setAttribute('cy', ay);
   }
 
   show(info, infoId, part, pointWorld, pinned) {
@@ -73,13 +242,17 @@ export class Callout {
       this.infoId = infoId;
       this.pinned = pinned;
       this.render(info, pinned);
-      this.pos = null; // re-seat the card next to the new anchor
+      if (!this.draggedPos) {
+        this.pos = null; // re-seat the card next to the new anchor
+      }
     }
     if (!this.visible) {
       this.card.hidden = false;
       requestAnimationFrame(() => this.card.classList.add('show'));
       this.visible = true;
-      this.pos = null;
+      if (!this.draggedPos) {
+        this.pos = null;
+      }
     }
     this.card.classList.toggle('pinned', pinned);
     this.setSvgVisible(true);
@@ -90,8 +263,11 @@ export class Callout {
     this.visible = false;
     this.infoId = null;
     this.part = null;
+    this.draggedPos = null; // reset user manual positioning on close
+    this.isDragging = false;
     this.teardownSensor();
-    this.card.classList.remove('show', 'pinned', 'sensor', 'sensor-compact');
+    this.card.classList.remove('show', 'pinned', 'sensor', 'sensor-compact', 'is-dragging');
+    document.body.classList.remove('callout-dragging-active');
     this.setSvgVisible(false);
     clearTimeout(this._t);
     this._t = setTimeout(() => {
@@ -113,17 +289,25 @@ export class Callout {
     this.ring.style.stroke = '#eeece9';
     const bars = [0, 1, 2, 3].map((i) => `<span class="${i < info.freedom ? 'on' : ''}"></span>`).join('');
     this.card.innerHTML = `
-      <div class="cat-row">
-        <span class="cat"><i style="background:${cat.color}"></i>${esc(cat.label)}</span>
-        ${pinned ? '<button class="close" aria-label="Close"></button>' : '<span class="pin">Click to pin</span>'}
+      <div class="card-header">
+        ${pinned ? `
+        <div class="card-drag-indicator" title="Drag to reposition panel">
+          <span class="card-drag-grip"></span>
+        </div>` : ''}
+        <div class="cat-row">
+          <span class="cat"><i style="background:${cat.color}"></i>${esc(cat.label)}</span>
+          ${pinned ? '<button class="close" aria-label="Close" title="Close details (Esc)"></button>' : '<span class="pin">Click to pin</span>'}
+        </div>
+        <h3>${esc(info.name)}</h3>
       </div>
-      <h3>${esc(info.name)}</h3>
-      <p>${esc(info.summary)}</p>
-      <p><b>Who makes it:</b> ${esc(cat.who)}</p>
-      <div class="freedom">Team design freedom <div class="bars">${bars}</div><em>${FREEDOM[info.freedom]}</em></div>
-      <ul>${info.rules.map((r) => `<li>${esc(r)}</li>`).join('')}</ul>
-      ${info.numbers?.length ? `<p>${info.numbers.map(([k, v]) => `<b>${esc(k)}:</b> ${esc(v)}`).join(' · ')}</p>` : ''}
-      ${info.isNew ? `<p><b>New for 2026:</b> ${esc(info.isNew)}</p>` : ''}
+      <div class="card-scroll-area">
+        <p>${esc(info.summary)}</p>
+        <p><b>Who makes it:</b> ${esc(cat.who)}</p>
+        <div class="freedom">Team design freedom <div class="bars">${bars}</div><em>${FREEDOM[info.freedom]}</em></div>
+        <ul>${info.rules.map((r) => `<li>${esc(r)}</li>`).join('')}</ul>
+        ${info.numbers?.length ? `<p>${info.numbers.map(([k, v]) => `<b>${esc(k)}:</b> ${esc(v)}`).join(' · ')}</p>` : ''}
+        ${info.isNew ? `<p><b>New for 2026:</b> ${esc(info.isNew)}</p>` : ''}
+      </div>
     `;
     this.card.querySelector('.close')?.addEventListener('click', () => this.onClose?.());
   }
@@ -148,26 +332,33 @@ export class Callout {
     this.dot.style.fill = '#131212';
     this.dot.style.stroke = catColor;
     this.ring.style.stroke = catColor;
+
     this.card.classList.add('sensor');
     this.card.classList.toggle('sensor-compact', !pinned);
     this.card.style.setProperty('--sc', catColor);
 
-    const head = `
-      <div class="cat-row">
-        <span class="cat"><i style="background:${catColor}"></i>${esc(cat.short)}<span class="cat-sep">in</span>${esc(group?.label ?? '')}</span>
-        <span class="sensor-auth-badge" style="background:${authColor}22; color:${authColor}; border:1px solid ${authColor}55;" title="${esc(auth.description)}">
-          ${esc(sensor.authority === 'FIA' ? 'FIA Mandatory' : 'Team Engineering')}
-        </span>
-        <span class="sensor-type-pill" title="${esc(typeDef.description)}">
-          ${esc(typeDef.label)}
-        </span>
-        ${pinned ? '<button class="close" aria-label="Close"></button>' : ''}
-      </div>
-      <h3>${esc(sensor.name)}</h3>
-      <p class="sensor-plain">${esc(sensor.plain)}</p>
-      <div class="sensor-meta-tags">
-        <span class="sensor-loc-tag" title="Physical Installation Point">📍 ${esc(sensor.locationDesc || 'Chassis')}</span>
-        <span class="sensor-part-tag" title="Connected Subsystem Component">🔗 ${esc(sensor.connectedComponent || 'Vehicle Sub-Loom')}</span>
+    const buildHeader = (isPinned) => `
+      <div class="card-header sensor-header">
+        ${isPinned ? `
+        <div class="card-drag-indicator" title="Drag to reposition panel">
+          <span class="card-drag-grip"></span>
+        </div>` : ''}
+        <div class="cat-row">
+          <span class="cat"><i style="background:${catColor}"></i>${esc(cat.short)}<span class="cat-sep">in</span>${esc(group?.label ?? '')}</span>
+          <span class="sensor-auth-badge" style="background:${authColor}22; color:${authColor}; border:1px solid ${authColor}55;" title="${esc(auth.description)}">
+            ${esc(sensor.authority === 'FIA' ? 'FIA Mandatory' : 'Team Engineering')}
+          </span>
+          <span class="sensor-type-pill" title="${esc(typeDef.description)}">
+            ${esc(typeDef.label)}
+          </span>
+          ${isPinned ? '<button class="close" aria-label="Close" title="Close details (Esc)"></button>' : ''}
+        </div>
+        <h3 class="sensor-title">${esc(sensor.name)}</h3>
+        <p class="sensor-plain">${esc(sensor.plain)}</p>
+        <div class="sensor-meta-tags">
+          <span class="sensor-loc-tag" title="Physical Installation Point">📍 ${esc(sensor.locationDesc || 'Chassis')}</span>
+          <span class="sensor-part-tag" title="Connected Subsystem Component">🔗 ${esc(sensor.connectedComponent || 'Vehicle Sub-Loom')}</span>
+        </div>
       </div>`;
 
     const liveBlock = `
@@ -184,7 +375,13 @@ export class Callout {
       </div>`;
 
     if (!pinned) {
-      this.card.innerHTML = `${head}${liveBlock}<p class="pin-hint">Click sensor marker on car to pin full telemetry suite</p>`;
+      this.card.innerHTML = `
+        ${buildHeader(false)}
+        <div class="card-scroll-area">
+          ${liveBlock}
+          <p class="pin-hint">Click sensor marker on car to pin full telemetry suite</p>
+        </div>
+      `;
       this.attachLive(sensor, catColor, true);
       return;
     }
@@ -306,20 +503,22 @@ export class Callout {
       </div>`;
 
     this.card.innerHTML = `
-      ${head}
-      <div class="sensor-3d-turntable-container" id="sensor-preview-slot"></div>
-      ${liveBlock}
-      ${faultControls}
-      <div class="sensor-tabs" role="tablist">
-        <button role="tab" data-tab="what" class="on">What it does</button>
-        <button role="tab" data-tab="how">How it works</button>
-        <button role="tab" data-tab="path">Signal path</button>
-      </div>
-      <div class="sensor-body">${tabWhat}${tabHow}${tabPath}</div>
-      <div class="sensor-nav">
-        <button data-nav="-1" aria-label="Previous sensor">‹</button>
-        <span><b>${idx + 1}</b> of ${SENSORS.length} · ${esc(group?.label ?? '')}</span>
-        <button data-nav="1" aria-label="Next sensor">›</button>
+      ${buildHeader(true)}
+      <div class="card-scroll-area">
+        <div class="sensor-3d-turntable-container" id="sensor-preview-slot"></div>
+        ${liveBlock}
+        ${faultControls}
+        <div class="sensor-tabs" role="tablist">
+          <button role="tab" data-tab="what" class="on">What it does</button>
+          <button role="tab" data-tab="how">How it works</button>
+          <button role="tab" data-tab="path">Signal path</button>
+        </div>
+        <div class="sensor-body">${tabWhat}${tabHow}${tabPath}</div>
+        <div class="sensor-nav">
+          <button data-nav="-1" aria-label="Previous sensor" title="Previous sensor">‹</button>
+          <span><b>${idx + 1}</b> of ${SENSORS.length} · ${esc(group?.label ?? '')}</span>
+          <button data-nav="1" aria-label="Next sensor" title="Next sensor">›</button>
+        </div>
       </div>
     `;
 
@@ -392,8 +591,6 @@ export class Callout {
       b.setAttribute('aria-selected', on);
     });
     this.card.querySelectorAll('[data-panel]').forEach((p) => (p.hidden = p.dataset.panel !== tab));
-    const body = this.card.querySelector('.sensor-body');
-    if (body) body.scrollTop = 0;
   }
 
   attachLive(sensor, color, compact) {
@@ -448,36 +645,47 @@ export class Callout {
     const ay = (-ndc.y * 0.5 + 0.5) * h;
 
     const cw = this.card.offsetWidth;
-    if (this.card.classList.contains('sensor') && w >= 700) {
-      const fb = freeBounds(h);
-      this.card.style.maxHeight = `${Math.max(260, fb.B - fb.T)}px`;
-    } else {
-      this.card.style.maxHeight = '';
-    }
-    const ch = this.card.offsetHeight;
-    const gap = 90;
+    const fb = freeBounds(h);
     const L = 16;
     const R = w - 16;
-    const { T, B } = freeBounds(h);
+    const { T, B } = fb;
+    const minCardH = 260;
+    const gap = 90;
+    const totalRoomH = Math.max(minCardH, B - T);
 
-    if (!this.pos) {
-      const roomRight = R - (ax + gap);
-      const roomLeft = ax - gap - L;
-      this.side = roomRight >= cw ? 1 : roomLeft >= cw ? -1 : roomRight > roomLeft ? 1 : -1;
+    if (this.draggedPos) {
+      // User has manually positioned the panel; keep clamped within visible bounds
+      const clampedX = THREE.MathUtils.clamp(this.draggedPos.x, L, Math.max(L, R - cw));
+      const clampedY = THREE.MathUtils.clamp(this.draggedPos.y, T - 16, Math.max(T - 16, B - minCardH));
+      this.draggedPos.x = clampedX;
+      this.draggedPos.y = clampedY;
+      this.pos = { x: clampedX, y: clampedY };
+      this.card.style.maxHeight = `${Math.max(minCardH, B - clampedY)}px`;
+    } else {
+      this.card.style.maxHeight = `${totalRoomH}px`;
+      const ch = Math.min(this.card.offsetHeight, totalRoomH);
+
+      if (!this.pos) {
+        const roomRight = R - (ax + gap);
+        const roomLeft = ax - gap - L;
+        this.side = roomRight >= cw ? 1 : roomLeft >= cw ? -1 : roomRight > roomLeft ? 1 : -1;
+      }
+      let tx = this.side > 0 ? ax + gap : ax - gap - cw;
+      // Vertically center panel gracefully relative to the 3D anchor so it uses full screen height
+      let ty = THREE.MathUtils.clamp(ay - Math.round(ch * 0.35), T, Math.max(T, B - ch));
+      tx = THREE.MathUtils.clamp(tx, L, Math.max(L, R - cw));
+      if (w < 600) {
+        tx = (w - cw) / 2;
+        ty = Math.max(T, B - ch);
+      }
+      if (!this.pos) this.pos = { x: tx, y: ty };
+      else {
+        this.pos.x += (tx - this.pos.x) * 0.2;
+        this.pos.y += (ty - this.pos.y) * 0.2;
+      }
+      this.card.style.maxHeight = `${Math.max(minCardH, B - this.pos.y)}px`;
     }
-    let tx = this.side > 0 ? ax + gap : ax - gap - cw;
-    let ty = ay - 70;
-    tx = THREE.MathUtils.clamp(tx, L, Math.max(L, R - cw));
-    ty = THREE.MathUtils.clamp(ty, T, Math.max(T, B - ch));
-    if (w < 600) {
-      tx = (w - cw) / 2;
-      ty = Math.max(T, B - ch);
-    }
-    if (!this.pos) this.pos = { x: tx, y: ty };
-    else {
-      this.pos.x += (tx - this.pos.x) * 0.2;
-      this.pos.y += (ty - this.pos.y) * 0.2;
-    }
+
     this.card.style.left = `${this.pos.x.toFixed(1)}px`;
     this.card.style.top = `${this.pos.y.toFixed(1)}px`;
 
@@ -486,6 +694,7 @@ export class Callout {
       return;
     }
     this.setSvgVisible(true);
+    const ch = this.card.offsetHeight;
     const edgeX = ax < this.pos.x + cw / 2 ? this.pos.x : this.pos.x + cw;
     const edgeY = THREE.MathUtils.clamp(ay, this.pos.y + 24, this.pos.y + ch - 24);
     const dir = edgeX > ax ? 1 : -1;

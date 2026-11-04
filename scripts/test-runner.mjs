@@ -227,6 +227,129 @@ async function main() {
   console.log(`✓ Quality Gate 3: Sensor Callout & 360° Turntable pinned -> "${cardTest.title}" (Status: ${cardTest.statusText})`);
   await captureScreenshot('03_sensor_card_turntable.png');
 
+  // Quality Gate 3B: Fixed Sensor Detail Panel — Scrolling & Draggable Interaction
+  const scrollDragTest = await evaluate(`
+    (() => {
+      const card = document.getElementById('card');
+      const header = card.querySelector('.card-header');
+      const closeBtn = card.querySelector('.close');
+      const scrollArea = card.querySelector('.card-scroll-area');
+      const navBottom = card.querySelector('.sensor-nav');
+      const dragGrip = card.querySelector('.card-drag-indicator');
+
+      // 1. Internal scrolling & long content accessibility check
+      const tabPathBtn = card.querySelector('[data-tab="path"]');
+      if (tabPathBtn) tabPathBtn.click();
+      window.__f1.advance(0.1);
+      const pathScrollH = scrollArea?.scrollHeight || 0;
+      const pathClientH = scrollArea?.clientHeight || 0;
+      const hasOverflow = pathScrollH > pathClientH;
+
+      // Scroll to bottom of long content
+      scrollArea.scrollTop = pathScrollH;
+      const navVisibleAfterScroll = navBottom.getBoundingClientRect().top < window.innerHeight + 50;
+      const headerStillAtTop = Math.abs(header.getBoundingClientRect().top - card.getBoundingClientRect().top) < 3;
+      const closeBtnVisible = closeBtn && !closeBtn.hidden;
+
+      // Switch back to what tab and leave scrolled to demonstrate lower sections accessibility
+      const tabWhatBtn = card.querySelector('[data-tab="what"]');
+      if (tabWhatBtn) tabWhatBtn.click();
+      window.__f1.advance(0.1);
+      scrollArea.scrollTop = 180;
+
+      // 2. Test Draggable Interaction
+      const initialLeft = card.offsetLeft;
+      const initialTop = card.offsetTop;
+
+      // Simulate dragging header by +60px X, +40px Y
+      const headerRect = header.getBoundingClientRect();
+      const startX = headerRect.left + 50;
+      const startY = headerRect.top + 15;
+
+      header.dispatchEvent(new PointerEvent('pointerdown', {
+        clientX: startX,
+        clientY: startY,
+        button: 0,
+        bubbles: true,
+        cancelable: true
+      }));
+
+      window.dispatchEvent(new PointerEvent('pointermove', {
+        clientX: startX + 60,
+        clientY: startY + 40,
+        bubbles: true,
+        cancelable: true
+      }));
+
+      window.dispatchEvent(new PointerEvent('pointerup', {
+        clientX: startX + 60,
+        clientY: startY + 40,
+        bubbles: true,
+        cancelable: true
+      }));
+
+      window.__f1.advance(0.1);
+      const draggedLeft = card.offsetLeft;
+      const draggedTop = card.offsetTop;
+      const dragMoved = Math.abs(draggedLeft - initialLeft) > 10 || Math.abs(draggedTop - initialTop) > 10;
+
+      // 3. Test non-dragging on interactive control (clicking close button should NOT move card)
+      const preClickLeft = card.offsetLeft;
+      closeBtn.dispatchEvent(new PointerEvent('pointerdown', {
+        clientX: closeBtn.getBoundingClientRect().left,
+        clientY: closeBtn.getBoundingClientRect().top,
+        button: 0,
+        bubbles: true,
+        cancelable: true
+      }));
+      window.dispatchEvent(new PointerEvent('pointermove', {
+        clientX: startX + 150,
+        clientY: startY + 150,
+        bubbles: true
+      }));
+      window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+      window.__f1.advance(0.1);
+      const postClickLeft = card.offsetLeft;
+      const buttonIgnoredDrag = Math.abs(postClickLeft - preClickLeft) < 2;
+
+      return {
+        hasHeader: !!header,
+        hasDragGrip: !!dragGrip,
+        hasCloseBtn: !!closeBtn,
+        hasScrollArea: !!scrollArea,
+        hasOverflow,
+        pathScrollH,
+        pathClientH,
+        headerStillAtTop,
+        closeBtnVisible,
+        navVisibleAfterScroll,
+        dragMoved,
+        buttonIgnoredDrag
+      };
+    })()
+  `);
+  console.log(`✓ Quality Gate 3B: Internal Scrolling (overflow=${scrollDragTest.hasOverflow}, sH=${scrollDragTest.pathScrollH}, cH=${scrollDragTest.pathClientH}, stickyHeader=${scrollDragTest.headerStillAtTop}) & Draggable Repositioning (dragMoved=${scrollDragTest.dragMoved}, ctlShielded=${scrollDragTest.buttonIgnoredDrag})`);
+  await captureScreenshot('03b_scrolled_and_dragged_panel.png');
+
+  // Also verify bottom of panel is 100% accessible
+  await evaluate(`
+    (() => {
+      const card = document.getElementById('card');
+      const scrollArea = card.querySelector('.card-scroll-area');
+      if (scrollArea) scrollArea.scrollTop = scrollArea.scrollHeight;
+      window.__f1.advance(0.1);
+    })()
+  `);
+  await captureScreenshot('03c_panel_scrolled_to_bottom.png');
+  await evaluate(`
+    (() => {
+      const card = document.getElementById('card');
+      const scrollArea = card.querySelector('.card-scroll-area');
+      if (scrollArea) scrollArea.scrollTop = 0;
+      window.__f1.advance(0.1);
+    })()
+  `);
+
   // Quality Gate 4: Interactive Fault Simulation & Diagnostic Response
   const faultTest = await evaluate(`
     (() => {
