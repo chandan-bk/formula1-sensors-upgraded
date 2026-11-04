@@ -1,5 +1,5 @@
 /**
- * Formula 1 Real-Time Motorsport IoT Telemetry Simulation Engine.
+ * Formula 1 Simulated Telemetry & Motorsport IoT Dynamics Engine.
  *
  * Implements a physically coupled vehicle telemetry simulator driven by a representative
  * 84-second Formula 1 lap. All 32 sensor channels are computed from a coherent shared
@@ -11,7 +11,7 @@
  *   2. Stuck (ADC freeze / mechanical seizure)
  *   3. Noisy (High-frequency EMI interference from 350 kW MGU-K switching)
  *   4. Out of Range (Positive rail electrical saturation)
- *   5. Delayed (CAN-FD queue latency / 3.0 s phase lag)
+ *   5. Delayed (CAN queue latency / 3.0 s phase lag)
  *   6. Intermittent (Contact bounce / periodic signal dropouts)
  *
  * All figures and formulas are representative motorsport engineering approximations,
@@ -72,7 +72,7 @@ export const FAULT_MODES = {
     label: 'Signal Latency (CAN Buffer Lag)',
     severity: 'warning',
     code: 'CAN_LAG',
-    description: 'Severe CAN-FD queue backlog or gateway buffer congestion introducing ~3.0 seconds of latency between physical event and telemetry record.',
+    description: 'Simulated CAN queue backlog or gateway buffer congestion introducing ~3.0 seconds of latency between physical event and telemetry record.',
     investigation: 'Examine CAN arbitration priority IDs, audit bus load utilization (target < 70%), and clear stale node queue buffers.',
   },
   intermittent: {
@@ -517,7 +517,7 @@ export const CHANNELS = {
     critHi: 92,
     bandLo: 35,
     bandHi: 75,
-    description: 'SECU internal high-speed CAN-FD vehicle network utilization metric.',
+    description: 'SECU internal vehicle CAN network utilization metric (simulated).',
   },
   rssi: {
     label: 'Telemetry Signal (RSSI)',
@@ -531,7 +531,7 @@ export const CHANNELS = {
     critHi: undefined,
     bandLo: -75,
     bandHi: -45,
-    description: 'Car-to-pit microwave RF telemetry link received signal strength indication.',
+    description: 'Car-to-pit wireless telemetry RF received signal strength indication (simulated).',
   },
 };
 

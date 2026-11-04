@@ -606,3 +606,22 @@ function disposeGroup(group) {
   });
   while (group.children.length) group.remove(group.children[0]);
 }
+
+/**
+ * Return current lifecycle state of the 360-degree sensor inspector.
+ * Enables automated test runners and diagnostics to verify complete mount/unmount and cleanup.
+ */
+export function getInspectorLifecycleState() {
+  return {
+    isMounted: animFrameId !== null,
+    animFrameActive: animFrameId !== null,
+    hasListeners: moveHandler !== null || upHandler !== null,
+    hasBaseRing: baseRing !== null,
+    previewChildrenCount: previewGroup?.children?.length || 0,
+    hasRenderer: previewRenderer !== null,
+  };
+}
+
+if (typeof window !== 'undefined') {
+  window.__f1_inspector_lifecycle = getInspectorLifecycleState;
+}

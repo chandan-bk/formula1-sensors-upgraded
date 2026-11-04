@@ -405,7 +405,7 @@ export class Callout {
           <button class="fault-btn" data-fault="stuck" title="Frozen ADC reading / seized linkage">Stuck ADC</button>
           <button class="fault-btn" data-fault="noisy" title="High-voltage MGU-K inverter EMI noise">EMI Noise</button>
           <button class="fault-btn" data-fault="out_of_range" title="Positive supply rail electrical saturation">Out-of-Range</button>
-          <button class="fault-btn" data-fault="delayed" title="CAN-FD buffer queue latency">CAN Delay</button>
+          <button class="fault-btn" data-fault="delayed" title="Simulated CAN buffer queue latency">CAN Delay</button>
           <button class="fault-btn" data-fault="intermittent" title="Vibration induced contact bounce">Intermittent</button>
         </div>
         <div class="fault-diagnostic-alert" data-fault-alert hidden>
@@ -441,7 +441,7 @@ export class Callout {
         </div>
         <div class="sensor-note checklist">
           <span>Pit wall diagnostic investigation checklist</span>
-          ${esc(sensor.investigation || 'Inspect wiring loom continuity, check excitation supply voltage, clean sensing element face, and verify CAN-FD bus termination resistance.')}
+          ${esc(sensor.investigation || 'Inspect wiring loom continuity, check excitation supply voltage, clean sensing element face, and verify CAN bus termination resistance.')}
         </div>
       </div>`;
 
@@ -498,7 +498,7 @@ export class Callout {
           </ol>
         </div>
         <div class="path-simulation-notice">
-          ℹ️ <b>System Architecture Notice:</b> Stages 1–3 represent vehicle electronics hardware. Stage 4 models the McLaren Applied TAG-320 SECU. In this web application, vehicle physics, CAN framing, and radio transmission are running inside the browser simulation engine.
+          ℹ️ <b>System Architecture Notice:</b> Stages 1–3 represent vehicle electronics hardware concepts. Stage 4 models the McLaren Applied TAG-320 SECU concept. In this web application, vehicle physics, CAN message queuing, and radio telemetry streaming are running inside the client-side JavaScript simulation engine.
         </div>
       </div>`;
 

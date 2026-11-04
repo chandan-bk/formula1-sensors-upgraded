@@ -383,19 +383,31 @@ export const SENSOR_DETAILS = {
   sen_secu: {
     group: 'comms', live: 'canLoad', fx: 'pulse', hz: 1000,
     plain: 'The mandatory FIA central computer running standard software to eliminate illegal traction control.',
-    principle: 'The McLaren Applied TAG-320 is the mandatory central engine and chassis control unit required by FIA regulations across all Formula 1 teams. It executes certified control algorithms, coordinates vehicle sub-networks, and records tamper-evident scrutineering telemetry.',
-    specs: [['Manufacturer', 'McLaren Applied (TAG-320 / SECU)'], ['Processor Architecture', 'Multi-core automotive DSP / PowerPC'], ['Network Interfaces', '6x CAN-FD, 2x Automotive Ethernet, LIN'], ['Telemetry Channels', '> 2,500 simultaneous logged channels'], ['Logging Memory', '32 GB secure flash memory']],
+    principle: 'The McLaren Applied TAG-320 represents the standardized central engine and chassis control unit required by FIA regulations across all Formula 1 constructors. It executes certified control laws, coordinates vehicle sensor buses, and logs scrutineering telemetry to enforce technical compliance.',
+    specs: [
+      ['Architecture Concept', 'McLaren Applied TAG-320 representative model'],
+      ['Processing Core', 'Automotive multi-core embedded controller'],
+      ['Network Topologies', 'Prioritized CAN / Automotive bus architecture'],
+      ['Simulated Telemetry', '32 core parameters (modelled from 1000s of F1 data channels)'],
+      ['Logging Function', 'Scrutineering state and event logging']
+    ],
     reading: 'Monitors CAN bus network utilization percentage (target < 75%) and processor core load. Spikes above 85% indicate bus arbitration contention.',
     failure: 'Total vehicle shutdown. The SECU controls ignition, fuel injection, hybrid power, and communications; failure leaves the car inert on track.',
-    investigation: '1. Connect SECU diagnostic console via Ethernet umbilical. 2. Inspect power supply rail voltages (12V and 5V regulated). 3. Check CAN bus termination resistance (60 Ohm across lines).',
+    investigation: '1. Connect SECU diagnostic console via dedicated interface loom. 2. Inspect power supply rail voltages (12V and 5V regulated). 3. Check CAN bus termination resistance (60 Ohm across lines).',
   },
   sen_telemetry_antenna: {
     group: 'comms', live: 'rssi', fx: 'rf', hz: 100,
-    plain: 'A shark fin microwave antenna streaming real-time telemetry to the pit wall at 300 km/h.',
-    principle: 'A conformal microwave antenna array embedded in the carbon engine cover fin operates on dedicated motorsport RF frequencies (S-band / C-band). It transmits ATLAS burst telemetry packets to trackside base station towers.',
-    specs: [['Frequency Band', 'S-band (2.3–2.5 GHz) / C-band'], ['RF Output Power', '1.0 to 5.0 W ERP'], ['Throughput', 'Up to 10 Mbps real-time burst'], ['Coverage Range', 'Full track coverage via networked base stations'], ['Signal Metric', 'RSSI (–100 dBm to –40 dBm)']],
-    reading: 'RSSI signal strength fluctuates between –50 dBm (close to pit straight towers) and –85 dBm (distant circuit sectors). Dips below –92 dBm indicate packet loss risks.',
+    plain: 'A shark fin RF telemetry antenna streaming simulated vehicle data to the pit wall.',
+    principle: 'Conformal radio-frequency antenna element integrated into the shark fin engine cover, representing motorsport wireless car-to-pit telemetry streaming to trackside receiver towers. In reality, modern F1 cars use dedicated motorsport burst telemetry links.',
+    specs: [
+      ['RF Link Concept', 'Bidirectional car-to-pit wireless telemetry stream'],
+      ['Frequency Concept', 'Motorsport telemetry RF spectrum (representative)'],
+      ['Link Quality Metric', 'Simulated RSSI (–100 dBm to –40 dBm)'],
+      ['Coverage Model', 'Continuous circuit perimeter link'],
+      ['Transmission Mode', 'Real-time telemetry burst simulation']
+    ],
+    reading: 'RSSI signal strength fluctuates between –50 dBm (strong link near pit straight towers) and –85 dBm (distant circuit sectors). Dips below –92 dBm indicate packet loss risks.',
     failure: 'Real-time telemetry to the pit wall stops. Engineers must rely on driver voice radio and download accumulated data from onboard flash memory during pit stops.',
-    investigation: '1. Inspect RF antenna coaxial cable connection and VSWR impedance matching. 2. Verify trackside telemetry base station tower alignment. 3. Check RF transceiver output power.',
+    investigation: '1. Inspect RF antenna coaxial cable connection and termination. 2. Verify trackside receiver station link status. 3. Check onboard telemetry modem status.',
   },
 };
